@@ -31,6 +31,7 @@ data ImplicitProperty = Termination
                       | StructParallel
                       | StructFinalPlace
                       | StructCommunicationFree
+                      | UniqueTerminalMarking
                       deriving (Show,Read)
 
 data RefinementType = TrapRefinement | SComponentRefinement | SComponentWithCutRefinement
@@ -176,6 +177,12 @@ options =
                    optProperties = StructCommunicationFree : optProperties opt
                }))
         "Prove that the net is communication-free"
+
+        , Option "" ["unique-terminal-marking"]
+        (NoArg (\opt -> Right opt {
+                   optProperties = UniqueTerminalMarking : optProperties opt
+               }))
+        "Prove that all markings of the net have a unique terminal marking"
 
         , Option "i" ["invariant"]
         (NoArg (\opt -> Right opt { optInvariant = True }))

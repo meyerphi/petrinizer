@@ -6,6 +6,7 @@ module Property
      renameProperty,
      PropertyType(..),
      PropertyContent(..),
+     ConstraintProperty(..),
      Formula(..),
      Op(..),
      Term(..),
@@ -89,20 +90,30 @@ instance Functor Formula where
 data PropertyType = SafetyType
                   | LivenessType
                   | StructuralType
+                  | ConstraintType
+
+data ConstraintProperty = UniqueTerminalMarkingConstraint
 
 data PropertyContent = Safety (Formula Place)
                   | Liveness (Formula Transition)
                   | Structural Structure
+                  | Constraint ConstraintProperty
 
+-- TODO: use Show instance
 showPropertyType :: PropertyContent -> String
 showPropertyType (Safety _) = "safety"
 showPropertyType (Liveness _) = "liveness"
 showPropertyType (Structural _) = "structural"
+showPropertyType (Constraint _) = "constraint"
+
+showConstraintProperty :: ConstraintProperty -> String
+showConstraintProperty UniqueTerminalMarkingConstraint = "unique terminal marking"
 
 showPropertyContent :: PropertyContent -> String
 showPropertyContent (Safety f) = show f
 showPropertyContent (Liveness f) = show f
 showPropertyContent (Structural s) = show s
+showPropertyContent (Constraint c) = showConstraintProperty c
 
 data Property = Property {
         pname :: String,
@@ -119,7 +130,7 @@ renameProperty f (Property pn (Safety pf)) =
         Property pn (Safety (fmap (renamePlace f) pf))
 renameProperty f (Property pn (Liveness pf)) =
         Property pn (Liveness (fmap (renameTransition f) pf))
-renameProperty _ (Property pn (Structural pc)) = Property pn (Structural pc)
+renameProperty _ p = p
 
 showPropertyName :: Property -> String
 showPropertyName p = showPropertyType (pcont p) ++ " property" ++

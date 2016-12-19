@@ -37,6 +37,7 @@ import Solver.SafetyInvariant
 import Solver.SComponentWithCut
 import Solver.SComponent
 import Solver.Simplifier
+import Solver.UniqueTerminalMarking
 --import Solver.Interpolant
 --import Solver.CommFreeReachability
 
@@ -214,6 +215,8 @@ makeImplicitProperty _ StructFinalPlace =
         Property "final place" $ Structural FinalPlace
 makeImplicitProperty _ StructCommunicationFree =
         Property "communication free" $ Structural CommunicationFree
+makeImplicitProperty _ UniqueTerminalMarking =
+        Property "unique terminal marking" $ Constraint UniqueTerminalMarkingConstraint
 
 checkProperty :: PetriNet -> Property -> OptIO PropResult
 checkProperty net p = do
@@ -223,6 +226,7 @@ checkProperty net p = do
             (Safety pf) -> checkSafetyProperty net pf
             (Liveness pf) -> checkLivenessProperty net pf
             (Structural ps) -> checkStructuralProperty net ps
+            (Constraint pc) -> checkConstraintProperty net pc
         verbosePut 0 $ showPropertyName p ++ " " ++
             case r of
                 Satisfied -> "is satisfied."
@@ -435,6 +439,15 @@ checkStructuralProperty net struct =
             return Satisfied
         else
             return Unsatisfied
+
+checkConstraintProperty :: PetriNet -> ConstraintProperty -> OptIO PropResult
+checkConstraintProperty net cp = do
+        let c = case cp of
+                 UniqueTerminalMarkingConstraint -> checkUniqueTerminalMarkingSat
+        r <- checkSat $ c net
+        case r of
+            Nothing -> return Satisfied
+            Just _ -> return Unknown
 
 main :: IO ()
 main = do
