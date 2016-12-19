@@ -9,26 +9,40 @@ import PetriNet
 import Property
 import Solver
 
-placeConstraints :: PetriNet -> SIMap Place -> SIMap Place -> SIMap Transition -> SBool
-placeConstraints net m1 m2 x =
-            bAnd $ map checkPlaceEquation $ places net
-        where checkPlaceEquation p =
+stateEquationConstraints :: PetriNet -> SIMap Place -> SIMap Place -> SIMap Transition -> SBool
+stateEquationConstraints net m1 m2 x =
+            bAnd $ map checkStateEquation $ places net
+        where checkStateEquation p =
                 let incoming = map addTransition $ lpre net p
                     outgoing = map addTransition $ lpost net p
                 in  val m1 p + sum incoming - sum outgoing .== val m2 p
               addTransition (t,w) = literal w * val x t
 
-nonNegativityConstraints :: PetriNet -> SIMap Place -> SIMap Place -> SBool
-nonNegativityConstraints net m1 m2 =
-            let m1nn = map (checkVal m1) $ places net
-                m2nn = map (checkVal m1) $ places net
-            in  bAnd m1nn &&& bAnd m2nn
-        where checkVal mapping n = val mapping n .>= 0
+nonNegativityConstraints :: PetriNet -> SIMap Place -> SBool
+nonNegativityConstraints net m =
+            bAnd $ map checkVal $ places net
+        where checkVal p = val m p .>= 0
+
+terminalConstraints :: PetriNet -> SIMap Place -> SBool
+terminalConstraints net m =
+            bAnd $ map checkTransition $ transitions net
+        where checkTransition :: Transition -> SBool
+              checkTransition t = bOr $ map checkPlace $ lpre net t
+              checkPlace (p,w) = val m p .< literal w
+
+nonEqualityConstraints :: PetriNet -> SIMap Place -> SIMap Place -> SBool
+nonEqualityConstraints net m1 m2 =
+            bOr $ map checkNonEquality $ places net
+        where checkNonEquality p = val m1 p ./= val m2 p
 
 checkUniqueTerminalMarking :: PetriNet -> SIMap Place -> SIMap Place -> SIMap Transition -> SBool
 checkUniqueTerminalMarking net m1 m2 x =
-        placeConstraints net m1 m2 x &&&
-        nonNegativityConstraints net m1 m2
+        nonEqualityConstraints net m1 m2 &&&
+        stateEquationConstraints net m1 m2 x &&&
+        nonNegativityConstraints net m1 &&&
+        nonNegativityConstraints net m2 &&&
+        terminalConstraints net m1 &&&
+        terminalConstraints net m2
 
 checkUniqueTerminalMarkingSat :: PetriNet -> ConstraintProblem Integer (Marking, Marking)
 checkUniqueTerminalMarkingSat net =
