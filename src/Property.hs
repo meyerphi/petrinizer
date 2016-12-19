@@ -94,26 +94,28 @@ data PropertyType = SafetyType
 
 data ConstraintProperty = UniqueTerminalMarkingConstraint
 
+instance Show ConstraintProperty where
+        show UniqueTerminalMarkingConstraint = "unique terminal marking"
+
 data PropertyContent = Safety (Formula Place)
                   | Liveness (Formula Transition)
                   | Structural Structure
                   | Constraint ConstraintProperty
 
--- TODO: use Show instance
 showPropertyType :: PropertyContent -> String
 showPropertyType (Safety _) = "safety"
 showPropertyType (Liveness _) = "liveness"
 showPropertyType (Structural _) = "structural"
 showPropertyType (Constraint _) = "constraint"
 
-showConstraintProperty :: ConstraintProperty -> String
-showConstraintProperty UniqueTerminalMarkingConstraint = "unique terminal marking"
-
 showPropertyContent :: PropertyContent -> String
 showPropertyContent (Safety f) = show f
 showPropertyContent (Liveness f) = show f
 showPropertyContent (Structural s) = show s
-showPropertyContent (Constraint c) = showConstraintProperty c
+showPropertyContent (Constraint c) = show c
+
+instance Show PropertyContent where
+        show pc = showPropertyType pc ++ " (" ++ showPropertyContent pc ++ ")"
 
 data Property = Property {
         pname :: String,
