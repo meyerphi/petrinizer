@@ -1,5 +1,5 @@
 name:                slapnet
-version:             0.9.0.0
+version:             0.9.1.0
 synopsis:            Safety and Liveness Analysis of Petri Nets with SMT solvers
 description:
     SLAPnet is a tool to check safety and liveness properties of Petri nets
