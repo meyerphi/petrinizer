@@ -44,16 +44,16 @@ checkUniqueTerminalMarking net m1 m2 x =
         terminalConstraints net m1 &&&
         terminalConstraints net m2
 
-checkUniqueTerminalMarkingSat :: PetriNet -> ConstraintProblem Integer (Marking, Marking)
+checkUniqueTerminalMarkingSat :: PetriNet -> ConstraintProblem Integer (Marking, Marking, FiringVector)
 checkUniqueTerminalMarkingSat net =
         let m1 = makeVarMap $ places net
             m2 = makeVarMapWith prime $ places net
             x  = makeVarMap $ transitions net
-        in  ("unique terminal marking", "pair of markings",
+        in  ("unique terminal marking", "pair of markings and firing vector",
              getNames m1 ++ getNames m2 ++ getNames x,
              \fm -> checkUniqueTerminalMarking net (fmap fm m1) (fmap fm m2) (fmap fm x),
-             \fm -> markingsFromAssignment (fmap fm m1) (fmap fm m2))
+             \fm -> markingsFromAssignment (fmap fm m1) (fmap fm m2) (fmap fm x))
 
-markingsFromAssignment :: IMap Place -> IMap Place -> (Marking, Marking)
-markingsFromAssignment m1 m2 = (makeVector m1, makeVector m2)
+markingsFromAssignment :: IMap Place -> IMap Place -> IMap Transition -> (Marking, Marking, FiringVector)
+markingsFromAssignment m1 m2 x = (makeVector m1, makeVector m2, makeVector x)
 
