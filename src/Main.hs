@@ -441,13 +441,43 @@ checkStructuralProperty net struct =
             return Unsatisfied
 
 checkConstraintProperty :: PetriNet -> ConstraintProperty -> OptIO PropResult
-checkConstraintProperty net cp = do
-        let c = case cp of
-                 UniqueTerminalMarkingConstraint -> checkUniqueTerminalMarkingSat
-        r <- checkSat $ c net
+checkConstraintProperty net cp =
+        case cp of
+            UniqueTerminalMarkingConstraint -> checkUniqueTerminalMarkingProperty net
+
+checkUniqueTerminalMarkingProperty :: PetriNet -> OptIO PropResult
+checkUniqueTerminalMarkingProperty net = do
+        r <- checkUniqueTerminalMarkingProperty' net []
         case r of
-            Nothing -> return Satisfied
-            Just _ -> return Unknown
+            (Nothing, _) -> return Satisfied
+            (Just _, _) -> return Unknown
+
+checkUniqueTerminalMarkingProperty' :: PetriNet ->
+        [Trap] -> OptIO (Maybe (Marking, Marking, Marking, FiringVector, FiringVector), [Trap])
+checkUniqueTerminalMarkingProperty' net traps = do
+        r <- checkSat $ checkUniqueTerminalMarkingSat net traps
+        case r of
+            Nothing -> return (Nothing, traps)
+            Just m -> do
+                refine <- opt optRefinementType
+                if isJust refine then
+                    refineUniqueTerminalMarkingProperty net traps m
+                else
+                    return (Just m, traps)
+
+refineUniqueTerminalMarkingProperty :: PetriNet ->
+        [Trap] -> (Marking, Marking, Marking, FiringVector, FiringVector) -> OptIO (Maybe (Marking, Marking, Marking, FiringVector, FiringVector), [Trap])
+refineUniqueTerminalMarkingProperty net traps m@(m0, m1, m2, x1, x2) = do
+        r1 <- checkSat $ checkUnmarkedTrapSat net m0 m1 x1
+        case r1 of
+            Nothing -> do
+                r2 <- checkSat $ checkUnmarkedTrapSat net m0 m2 x2
+                case r2 of
+                    Nothing -> return (Just m, traps)
+                    Just trap ->
+                        checkUniqueTerminalMarkingProperty' net (trap:traps)
+            Just trap ->
+                checkUniqueTerminalMarkingProperty' net (trap:traps)
 
 main :: IO ()
 main = do
