@@ -1,22 +1,20 @@
 #!/bin/bash
 
-#benchmarks=( 'service-tech/ibm-soundness' 'service-tech/sap-reference' )
-#benchmarks=( 'cav-benchmarks/mist' 'cav-benchmarks/wahl-kroening' 'cav-benchmarks/soter' 'cav-benchmarks/medical' 'cav-benchmarks/bug_tracking' )
 benchmarks=( 'service-tech/ibm-soundness' )
-#benchmarks=( 'service-tech/sap-reference' )
-extensions=( 'pnet' 'tpn' 'lola' 'spec' )
+extensions=( 'lola' )
+
+properties=( 'safe' 'fin' )
 
 tool='lola'
-executable='/home/philipp/local/lola-2.0/src/lola'
+executable='lola'
+options=''
 
 #1 hour
 time_soft=$(expr 1 \* 3600)
 time_hard=$(expr $time_soft + 60)
-#2 gigabyte
-mem_soft=$(expr 2 \* 1024 \* 1024)
+#8 gigabyte
+mem_soft=$(expr 8 \* 1024 \* 1024)
 mem_hard=$(expr $mem_soft + 1024)
-
-properties=( 'safe' )
 
 for benchmark in ${benchmarks[@]}; do
     benchmark_dir="$benchmark"
@@ -34,8 +32,8 @@ for benchmark in ${benchmarks[@]}; do
                     ulimit -S -v $mem_soft
                     ulimit -H -v $mem_hard
                     set -o pipefail;
-                    echo $executable -f $file.$prop.task1 $file.$prop
-                    $executable -f $file.$prop.task1 $file.$prop 2>&1 | tee $file.out
+                    echo $executable $options -f $file.$prop.task $file
+                    $executable $options -f $file.$prop.task $file 2>&1 | tee $file.out
                 )
                 result=$?
                 ryes=$(grep "result: yes" $file.out)
