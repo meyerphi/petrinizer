@@ -447,37 +447,40 @@ checkConstraintProperty net cp =
 
 checkUniqueTerminalMarkingProperty :: PetriNet -> OptIO PropResult
 checkUniqueTerminalMarkingProperty net = do
-        r <- checkUniqueTerminalMarkingProperty' net []
+        r <- checkUniqueTerminalMarkingProperty' net [] []
         case r of
-            (Nothing, _) -> return Satisfied
-            (Just _, _) -> return Unknown
+            (Nothing, _, _) -> return Satisfied
+            (Just _, _, _) -> return Unknown
 
 checkUniqueTerminalMarkingProperty' :: PetriNet ->
-        [Trap] -> OptIO (Maybe (Marking, Marking, Marking, FiringVector, FiringVector), [Trap])
-checkUniqueTerminalMarkingProperty' net traps = do
-        r <- checkSat $ checkUniqueTerminalMarkingSat net traps
+        [Trap] -> [Siphon] ->
+        OptIO (Maybe (Marking, Marking, Marking, FiringVector, FiringVector), [Trap], [Siphon])
+checkUniqueTerminalMarkingProperty' net traps siphons = do
+        r <- checkSat $ checkUniqueTerminalMarkingSat net traps siphons
         case r of
-            Nothing -> return (Nothing, traps)
+            Nothing -> return (Nothing, traps, siphons)
             Just m -> do
                 refine <- opt optRefinementType
                 if isJust refine then
-                    refineUniqueTerminalMarkingProperty net traps m
+                    refineUniqueTerminalMarkingProperty net traps siphons m
                 else
-                    return (Just m, traps)
+                    return (Just m, traps, siphons)
 
 refineUniqueTerminalMarkingProperty :: PetriNet ->
-        [Trap] -> (Marking, Marking, Marking, FiringVector, FiringVector) -> OptIO (Maybe (Marking, Marking, Marking, FiringVector, FiringVector), [Trap])
-refineUniqueTerminalMarkingProperty net traps m@(m0, m1, m2, x1, x2) = do
-        r1 <- checkSat $ checkUnmarkedTrapSat net m0 m1 x1
+        [Trap] -> [Siphon] -> (Marking, Marking, Marking, FiringVector, FiringVector) ->
+        OptIO (Maybe (Marking, Marking, Marking, FiringVector, FiringVector), [Trap], [Siphon])
+refineUniqueTerminalMarkingProperty net traps siphons m@(m0, m1, m2, x1, x2) = do
+        r1 <- checkSat $ checkUnmarkedTrapSat net m0 m1 m2 x1 x2
         case r1 of
             Nothing -> do
-                r2 <- checkSat $ checkUnmarkedTrapSat net m0 m2 x2
+                r2 <- checkSat $ checkUnmarkedSiphonSat net m0 m1 m2 x1 x2
                 case r2 of
-                    Nothing -> return (Just m, traps)
-                    Just trap ->
-                        checkUniqueTerminalMarkingProperty' net (trap:traps)
+                    Nothing ->
+                        return (Just m, traps, siphons)
+                    Just siphon ->
+                        checkUniqueTerminalMarkingProperty' net traps (siphon:siphons)
             Just trap ->
-                checkUniqueTerminalMarkingProperty' net (trap:traps)
+                checkUniqueTerminalMarkingProperty' net (trap:traps) siphons
 
 main :: IO ()
 main = do

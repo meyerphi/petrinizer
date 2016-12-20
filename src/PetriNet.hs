@@ -8,7 +8,7 @@ module PetriNet
      initialMarking,initial,initials,linitials,
      pre,lpre,post,lpost,mpre,mpost,context,ghostTransitions,
      makePetriNet,makePetriNetWithTrans,
-     makePetriNetFromStrings,makePetriNetWithTransFromStrings,Trap,Cut,
+     makePetriNetFromStrings,makePetriNetWithTransFromStrings,Trap,Siphon,Cut,
      constructCut,SimpleCut,Invariant(..))
 where
 
@@ -61,6 +61,7 @@ type Marking = Vector Place
 type FiringVector = Vector Transition
 
 type Trap = [Place]
+type Siphon = [Place]
 -- TODO: generalize cut type
 type Cut = ([([Place], [Transition])], [Transition])
 
