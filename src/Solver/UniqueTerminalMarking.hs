@@ -2,6 +2,7 @@
 
 module Solver.UniqueTerminalMarking
     (checkUniqueTerminalMarkingSat,
+     UniqueTerminalMarkingCounterExample,
      checkUnmarkedTrapSat,
      checkUnmarkedSiphonSat)
 where
@@ -14,27 +15,29 @@ import PetriNet
 import Property
 import Solver
 
-stateEquationConstraints :: PetriNet -> SIMap Place -> SIMap Place -> SIMap Transition -> SBool
+type UniqueTerminalMarkingCounterExample = (RMarking, RMarking, RMarking, RFiringVector, RFiringVector)
+
+stateEquationConstraints :: PetriNet -> SRMap Place -> SRMap Place -> SRMap Transition -> SBool
 stateEquationConstraints net m0 m x =
             bAnd $ map checkStateEquation $ places net
         where checkStateEquation p =
                 let incoming = map addTransition $ lpre net p
                     outgoing = map addTransition $ lpost net p
                 in  val m0 p + sum incoming - sum outgoing .== val m p
-              addTransition (t,w) = literal w * val x t
+              addTransition (t,w) = literal (fromInteger w) * val x t
 
-nonNegativityConstraints :: (Ord a, Show a) => SIMap a -> SBool
+nonNegativityConstraints :: (Ord a, Show a) => SRMap a -> SBool
 nonNegativityConstraints m =
             bAnd $ map checkVal $ vals m
         where checkVal x = x .>= 0
 
-terminalConstraints :: PetriNet -> SIMap Place -> SBool
+terminalConstraints :: PetriNet -> SRMap Place -> SBool
 terminalConstraints net m =
             bAnd $ map checkTransition $ transitions net
         where checkTransition t = bOr $ map checkPlace $ lpre net t
-              checkPlace (p,w) = val m p .< literal w
+              checkPlace (p,w) = val m p .== 0
 
-nonEqualityConstraints :: (Ord a, Show a) => PetriNet -> SIMap a -> SIMap a -> SBool
+nonEqualityConstraints :: (Ord a, Show a) => PetriNet -> SRMap a -> SRMap a -> SBool
 nonEqualityConstraints net m1 m2 =
             if elemsSet m1 /= elemsSet m2 then
                 false
@@ -42,29 +45,29 @@ nonEqualityConstraints net m1 m2 =
                 bOr $ map checkNonEquality $ elems m1
         where checkNonEquality x = val m1 x ./= val m2 x
 
-checkTrap :: PetriNet -> SIMap Place -> SIMap Place -> SIMap Place -> SIMap Transition -> SIMap Transition -> Trap -> SBool
+checkTrap :: PetriNet -> SRMap Place -> SRMap Place -> SRMap Place -> SRMap Transition -> SRMap Transition -> Trap -> SBool
 checkTrap net m0 m1 m2 x1 x2 trap =
             (markedByMarking m0 ==> (markedByMarking m1 &&& markedByMarking m2)) &&&
             (markedBySequence x1 ==> markedByMarking m1) &&&
             (markedBySequence x2 ==> markedByMarking m2)
-        where markedByMarking m = sum (map (val m) trap) .>= 1
-              markedBySequence x = sum (map (val x) (mpre net trap)) .>= 1
+        where markedByMarking m = sum (map (val m) trap) .> 0
+              markedBySequence x = sum (map (val x) (mpre net trap)) .> 0
 
-checkTrapConstraints :: PetriNet -> SIMap Place -> SIMap Place -> SIMap Place -> SIMap Transition -> SIMap Transition -> [Trap] -> SBool
+checkTrapConstraints :: PetriNet -> SRMap Place -> SRMap Place -> SRMap Place -> SRMap Transition -> SRMap Transition -> [Trap] -> SBool
 checkTrapConstraints net m0 m1 m2 x1 x2 traps =
         bAnd $ map (checkTrap net m0 m1 m2 x1 x2) traps
 
-checkSiphon :: PetriNet -> SIMap Place -> SIMap Place -> SIMap Place -> SIMap Transition -> SIMap Transition -> Siphon -> SBool
+checkSiphon :: PetriNet -> SRMap Place -> SRMap Place -> SRMap Place -> SRMap Transition -> SRMap Transition -> Siphon -> SBool
 checkSiphon net m0 m1 m2 x1 x2 siphon =
             unmarkedByMarking m0 ==> (unmarkedByMarking m1 &&& unmarkedByMarking m2 &&& notPresetOfSequence x1 &&& notPresetOfSequence x2)
         where unmarkedByMarking m = sum (map (val m) siphon) .== 0
               notPresetOfSequence x = sum (map (val x) (mpost net siphon)) .== 0
 
-checkSiphonConstraints :: PetriNet -> SIMap Place -> SIMap Place -> SIMap Place -> SIMap Transition -> SIMap Transition -> [Siphon] -> SBool
+checkSiphonConstraints :: PetriNet -> SRMap Place -> SRMap Place -> SRMap Place -> SRMap Transition -> SRMap Transition -> [Siphon] -> SBool
 checkSiphonConstraints net m0 m1 m2 x1 x2 siphons =
         bAnd $ map (checkSiphon net m0 m1 m2 x1 x2) siphons
 
-checkUniqueTerminalMarking :: PetriNet -> SIMap Place -> SIMap Place -> SIMap Place -> SIMap Transition -> SIMap Transition ->
+checkUniqueTerminalMarking :: PetriNet -> SRMap Place -> SRMap Place -> SRMap Place -> SRMap Transition -> SRMap Transition ->
         [Trap] -> [Siphon] -> SBool
 checkUniqueTerminalMarking net m0 m1 m2 x1 x2 traps siphons =
         nonEqualityConstraints net m1 m2 &&&
@@ -80,7 +83,7 @@ checkUniqueTerminalMarking net m0 m1 m2 x1 x2 traps siphons =
         checkTrapConstraints net m0 m1 m2 x1 x2 traps &&&
         checkSiphonConstraints net m0 m1 m2 x1 x2 siphons
 
-checkUniqueTerminalMarkingSat :: PetriNet -> [Trap] -> [Siphon] -> ConstraintProblem Integer (Marking, Marking, Marking, FiringVector, FiringVector)
+checkUniqueTerminalMarkingSat :: PetriNet -> [Trap] -> [Siphon] -> ConstraintProblem AlgReal UniqueTerminalMarkingCounterExample
 checkUniqueTerminalMarkingSat net traps siphons =
         let m0 = makeVarMap $ places net
             m1 = makeVarMapWith prime $ places net
@@ -92,8 +95,9 @@ checkUniqueTerminalMarkingSat net traps siphons =
              \fm -> checkUniqueTerminalMarking net (fmap fm m0) (fmap fm m1) (fmap fm m2) (fmap fm x1) (fmap fm x2) traps siphons,
              \fm -> markingsFromAssignment (fmap fm m0) (fmap fm m1) (fmap fm m2) (fmap fm x1) (fmap fm x2))
 
-markingsFromAssignment :: IMap Place -> IMap Place -> IMap Place -> IMap Transition -> IMap Transition -> (Marking, Marking, Marking, FiringVector, FiringVector)
-markingsFromAssignment m0 m1 m2 x1 x2 = (makeVector m0, makeVector m1, makeVector m2, makeVector x1, makeVector x2)
+markingsFromAssignment :: RMap Place -> RMap Place -> RMap Place -> RMap Transition -> RMap Transition -> UniqueTerminalMarkingCounterExample
+markingsFromAssignment m0 m1 m2 x1 x2 =
+        (makeVector m0, makeVector m1, makeVector m2, makeVector x1, makeVector x2)
 
 -- trap and siphon refinement constraints
 
@@ -109,22 +113,22 @@ trapConstraints net b =
         where trapConstraint t =
                   bOr (mval b (pre net t)) ==> bOr (mval b (post net t))
 
-placesMarkedByMarking :: PetriNet -> Marking -> SBMap Place -> SBool
+placesMarkedByMarking :: PetriNet -> RMarking -> SBMap Place -> SBool
 placesMarkedByMarking net m b = bOr $ mval b $ elems m
 
-placesUnmarkedByMarking :: PetriNet -> Marking -> SBMap Place -> SBool
+placesUnmarkedByMarking :: PetriNet -> RMarking -> SBMap Place -> SBool
 placesUnmarkedByMarking net m b = bAnd $ map (bnot . val b) $ elems m
 
-placesPostsetOfSequence :: PetriNet -> FiringVector -> SBMap Place -> SBool
+placesPostsetOfSequence :: PetriNet -> RFiringVector -> SBMap Place -> SBool
 placesPostsetOfSequence net x b = bOr $ mval b $ mpost net $ elems x
 
-placesPresetOfSequence :: PetriNet -> FiringVector -> SBMap Place -> SBool
+placesPresetOfSequence :: PetriNet -> RFiringVector -> SBMap Place -> SBool
 placesPresetOfSequence net x b = bOr $ mval b $ mpre net $ elems x
 
 nonemptySet :: (Ord a, Show a) => SBMap a -> SBool
 nonemptySet b = bOr $ vals b
 
-checkUnmarkedTrap :: PetriNet -> Marking -> Marking -> Marking -> FiringVector -> FiringVector -> SBMap Place -> SBool
+checkUnmarkedTrap :: PetriNet -> RMarking -> RMarking -> RMarking -> RFiringVector -> RFiringVector -> SBMap Place -> SBool
 checkUnmarkedTrap net m0 m1 m2 x1 x2 b =
         trapConstraints net b &&&
         nonemptySet b &&&
@@ -134,7 +138,7 @@ checkUnmarkedTrap net m0 m1 m2 x1 x2 b =
             (placesPostsetOfSequence net x2 b &&& placesUnmarkedByMarking net m2 b)
         )
 
-checkUnmarkedTrapSat :: PetriNet -> Marking -> Marking -> Marking -> FiringVector -> FiringVector -> ConstraintProblem Bool Siphon
+checkUnmarkedTrapSat :: PetriNet -> RMarking -> RMarking -> RMarking -> RFiringVector -> RFiringVector -> ConstraintProblem Bool Trap
 checkUnmarkedTrapSat net m0 m1 m2 x1 x2 =
         let b = makeVarMap $ places net
         in  ("trap marked in m and unmarked in m1 or m2, or marked by x1 and unmarked in m1, or marked by x2 and unmarked in m2", "trap",
@@ -142,7 +146,7 @@ checkUnmarkedTrapSat net m0 m1 m2 x1 x2 =
              \fm -> checkUnmarkedTrap net m0 m1 m2 x1 x2 (fmap fm b),
              \fm -> placesFromAssignment (fmap fm b))
 
-checkUnmarkedSiphon :: PetriNet -> Marking -> Marking -> Marking -> FiringVector -> FiringVector -> SBMap Place -> SBool
+checkUnmarkedSiphon :: PetriNet -> RMarking -> RMarking -> RMarking -> RFiringVector -> RFiringVector -> SBMap Place -> SBool
 checkUnmarkedSiphon net m0 m1 m2 x1 x2 b =
         siphonConstraints net b &&&
         nonemptySet b &&&
@@ -151,7 +155,7 @@ checkUnmarkedSiphon net m0 m1 m2 x1 x2 b =
              placesPresetOfSequence net x1 b ||| placesPresetOfSequence net x2 b)
         )
 
-checkUnmarkedSiphonSat :: PetriNet -> Marking -> Marking -> Marking -> FiringVector -> FiringVector -> ConstraintProblem Bool Siphon
+checkUnmarkedSiphonSat :: PetriNet -> RMarking -> RMarking -> RMarking -> RFiringVector -> RFiringVector -> ConstraintProblem Bool Siphon
 checkUnmarkedSiphonSat net m0 m1 m2 x1 x2 =
         let b = makeVarMap $ places net
         in  ("siphon unmarked in m0 and marked in m1 or m2 or used as input in x1 or x2", "siphon",

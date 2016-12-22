@@ -454,7 +454,7 @@ checkUniqueTerminalMarkingProperty net = do
 
 checkUniqueTerminalMarkingProperty' :: PetriNet ->
         [Trap] -> [Siphon] ->
-        OptIO (Maybe (Marking, Marking, Marking, FiringVector, FiringVector), [Trap], [Siphon])
+        OptIO (Maybe UniqueTerminalMarkingCounterExample, [Trap], [Siphon])
 checkUniqueTerminalMarkingProperty' net traps siphons = do
         r <- checkSat $ checkUniqueTerminalMarkingSat net traps siphons
         case r of
@@ -467,8 +467,8 @@ checkUniqueTerminalMarkingProperty' net traps siphons = do
                     return (Just m, traps, siphons)
 
 refineUniqueTerminalMarkingProperty :: PetriNet ->
-        [Trap] -> [Siphon] -> (Marking, Marking, Marking, FiringVector, FiringVector) ->
-        OptIO (Maybe (Marking, Marking, Marking, FiringVector, FiringVector), [Trap], [Siphon])
+        [Trap] -> [Siphon] -> UniqueTerminalMarkingCounterExample ->
+        OptIO (Maybe UniqueTerminalMarkingCounterExample, [Trap], [Siphon])
 refineUniqueTerminalMarkingProperty net traps siphons m@(m0, m1, m2, x1, x2) = do
         r1 <- checkSat $ checkUnmarkedTrapSat net m0 m1 m2 x1 x2
         case r1 of

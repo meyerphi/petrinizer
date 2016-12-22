@@ -16,7 +16,7 @@ import Solver
 import Property
 import PetriNet
 
-type SimpleTerm = (Vector Place, Integer)
+type SimpleTerm = (IVector Place, Integer)
 type NamedTerm = (String, SimpleTerm)
 
 data SafetyInvariant =

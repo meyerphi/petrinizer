@@ -18,7 +18,7 @@ import Property
 import PetriNet
 
 data LivenessInvariant =
-            RankingFunction (SimpleCut, Vector Place)
+            RankingFunction (SimpleCut, IVector Place)
           | ComponentCut (SimpleCut, [Trap]) -- TODO: add proof why 
 
 instance Invariant LivenessInvariant where

@@ -3,6 +3,7 @@
 
 module PetriNet
     (PetriNet,Place(..),Transition(..),Marking,FiringVector,
+     RMarking,RFiringVector,
      renamePlace,renameTransition,renamePetriNetPlacesAndTransitions,
      name,showNetName,places,transitions,
      initialMarking,initial,initials,linitials,
@@ -57,8 +58,11 @@ instance Nodes Place Transition where
 instance Nodes Transition Place where
         contextMap = adjacencyT
 
-type Marking = Vector Place
-type FiringVector = Vector Transition
+type Marking = IVector Place
+type FiringVector = IVector Transition
+
+type RMarking = RVector Place
+type RFiringVector = RVector Transition
 
 type Trap = [Place]
 type Siphon = [Place]

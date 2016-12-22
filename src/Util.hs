@@ -4,7 +4,7 @@ module Util
     (elems,elemsSet,items,size,emap,prime,numPref,
      listSet,listMap,val,vals,mval,zeroVal,positiveVal,sumVal,
      makeVarMap,makeVarMapWith,buildVector,makeVector,getNames,
-     Vector,Model,VarMap,SIMap,SBMap,IMap,BMap,showWeighted,
+     Vector,IVector,RVector,Model,VarMap,SIMap,SRMap,SBMap,IMap,RMap,BMap,showWeighted,
      OptIO,verbosePut,opt,putLine,parallelIO)
 where
 
@@ -25,12 +25,16 @@ import Options
 - Various maps and functions on them
 -}
 
-newtype Vector a = Vector { getVector :: M.Map a Integer }
+newtype Vector a b = Vector { getVector :: M.Map a b }
+type IVector a = Vector a Integer
+type RVector a = Vector a AlgReal
 type Model a = M.Map String a
 type VarMap a = M.Map a String
 type SIMap a = M.Map a SInteger
+type SRMap a = M.Map a SReal
 type SBMap a = M.Map a SBool
 type IMap a = M.Map a Integer
+type RMap a = M.Map a AlgReal
 type BMap a = M.Map a Bool
 
 class MapLike c a b | c -> a, c -> b where
@@ -56,7 +60,7 @@ instance (Ord a, Show a, Show b) => MapLike (M.Map a b) a b where
         elemsSet = M.keysSet
         size = M.size
 
-instance (Ord a, Show a) => MapLike (Vector a) a Integer where
+instance (Ord a, Show a, Num b, Show b) => MapLike (Vector a b) a b where
         val (Vector v) x = M.findWithDefault 0 x v
         vals = vals . getVector
         items = M.toList . getVector
@@ -64,13 +68,13 @@ instance (Ord a, Show a) => MapLike (Vector a) a Integer where
         elemsSet = M.keysSet . getVector
         size = M.size . getVector
 
-instance (Show a) => Show (Vector a) where
+instance (Show a, Show b, Num b, Eq b) => Show (Vector a b) where
         show (Vector v) =
                 "[" ++ intercalate "," (map showEntry (M.toList v)) ++ "]"
             where showEntry (i,x) =
                     show i ++ (if x /= 1 then "(" ++ show x ++ ")" else "")
 
-emap :: (Ord a, Ord b) => (a -> b) -> Vector a -> Vector b
+emap :: (Ord a, Ord b) => (a -> b) -> Vector a c -> Vector b c
 emap f = Vector . M.mapKeys f . getVector
 
 zeroVal :: (Ord a, Show a) => M.Map a SInteger -> a -> SBool
@@ -88,10 +92,10 @@ makeVarMapWith f xs = M.fromList $ xs `zip` map (f . show) xs
 getNames :: VarMap a -> [String]
 getNames = M.elems
 
-buildVector :: (Ord a) => [(a, Integer)] -> Vector a
+buildVector :: (Ord a, Num b, Eq b) => [(a, b)] -> Vector a b
 buildVector = makeVector . M.fromList
 
-makeVector :: (Ord a) => M.Map a Integer -> Vector a
+makeVector :: (Ord a, Num b, Eq b) => M.Map a b -> Vector a b
 makeVector = Vector . M.filter (/=0)
 
 {-
