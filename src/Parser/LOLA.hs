@@ -57,7 +57,7 @@ net = do
         initial <- option [] markingList
         _ <- semi
         ts <- many1 transition
-        return $ makePetriNetWithTransFromStrings "" ps ts initial []
+        return $ makePetriNetWithTransFromStrings "" ps ts initial [] [] []
 
 placeLists :: Parser [String]
 placeLists =

@@ -58,7 +58,7 @@ net = do
         reserved "init"
         (is,initTrans) <- initial
         return $ makePetriNetWithTransFromStrings "" ps (initTrans ++ ts) is
-                 (map fst initTrans)
+                 (map fst initTrans) [] []
 
 prop :: Parser Property
 prop = do

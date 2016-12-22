@@ -77,7 +77,7 @@ petriNet = do
         ts <- many transition
         let places = [ p | (p,_) <- ps ]
             initial = [ (p,i) | (p,Just i) <- ps ]
-        return $ makePetriNetWithTransFromStrings "" places ts initial []
+        return $ makePetriNetWithTransFromStrings "" places ts initial [] [] []
 
 parseContent :: Parser (PetriNet,[Property])
 parseContent = do

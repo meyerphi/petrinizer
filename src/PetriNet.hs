@@ -7,7 +7,7 @@ module PetriNet
      renamePlace,renameTransition,renamePetriNetPlacesAndTransitions,
      name,showNetName,places,transitions,
      initialMarking,initial,initials,linitials,
-     pre,lpre,post,lpost,mpre,mpost,context,ghostTransitions,
+     pre,lpre,post,lpost,mpre,mpost,context,ghostTransitions,fixedTraps,fixedSiphons,
      makePetriNet,makePetriNetWithTrans,
      makePetriNetFromStrings,makePetriNetWithTransFromStrings,Trap,Siphon,Cut,
      constructCut,SimpleCut,Invariant(..))
@@ -79,7 +79,9 @@ data PetriNet = PetriNet {
         adjacencyP :: M.Map Place ([(Transition,Integer)], [(Transition,Integer)]),
         adjacencyT :: M.Map Transition ([(Place,Integer)], [(Place,Integer)]),
         initialMarking :: Marking,
-        ghostTransitions :: [Transition]
+        ghostTransitions :: [Transition],
+        fixedTraps :: [Trap],
+        fixedSiphons :: [Siphon]
 }
 
 initial :: PetriNet -> Place -> Integer
@@ -104,7 +106,9 @@ instance Show PetriNet where
                    "\nTransition arcs:\n" ++ unlines
                         (map showContext (M.toList (adjacencyT net))) ++
                    "\nInitial: " ++ show (initialMarking net) ++
-                   "\nGhost transitions: " ++ show (ghostTransitions net)
+                   "\nGhost transitions: " ++ show (ghostTransitions net) ++
+                   "\nFixed traps: " ++ show (fixedTraps net) ++
+                   "\nFixed siphons: " ++ show (fixedSiphons net)
                 where showContext (s,(l,r)) =
                           show l ++ " -> " ++ show s ++ " -> " ++ show r
 
@@ -143,7 +147,9 @@ renamePetriNetPlacesAndTransitions f net =
                     adjacencyT net,
                 initialMarking = emap (renamePlace f) $ initialMarking net,
                 ghostTransitions =
-                    listSet $ map (renameTransition f) $ ghostTransitions net
+                    listSet $ map (renameTransition f) $ ghostTransitions net,
+                fixedTraps = map (map $ renamePlace f) $ fixedTraps net,
+                fixedSiphons = map (map $ renamePlace f) $ fixedSiphons net
             }
         where mapAdjacency f g m = M.mapKeys f (M.map (mapContext g) m)
               mapContext f (pre, post) =
@@ -151,8 +157,8 @@ renamePetriNetPlacesAndTransitions f net =
 
 makePetriNet :: String -> [Place] -> [Transition] ->
         [Either (Transition, Place, Integer) (Place, Transition, Integer)] ->
-        [(Place, Integer)] -> [Transition] -> PetriNet
-makePetriNet name places transitions arcs initial gs =
+        [(Place, Integer)] -> [Transition] -> [Trap] -> [Siphon] -> PetriNet
+makePetriNet name places transitions arcs initial gs fixedTraps fixedSiphons =
             PetriNet {
                 name = name,
                 places = listSet places,
@@ -160,7 +166,9 @@ makePetriNet name places transitions arcs initial gs =
                 adjacencyP = M.map (listMap *** listMap) adP,
                 adjacencyT = M.map (listMap *** listMap)adT,
                 initialMarking = buildVector initial,
-                ghostTransitions = listSet gs
+                ghostTransitions = listSet gs,
+                fixedTraps = map listSet fixedTraps,
+                fixedSiphons = map listSet fixedSiphons
             }
         where
             (adP, adT) = foldl buildMaps (M.empty, M.empty) arcs
@@ -182,8 +190,8 @@ makePetriNet name places transitions arcs initial gs =
 
 makePetriNetFromStrings :: String -> [String] -> [String] ->
         [(String, String, Integer)] ->
-        [(String, Integer)] -> [String] -> PetriNet
-makePetriNetFromStrings name places transitions arcs initial gs =
+        [(String, Integer)] -> [String] -> [[String]] -> [[String]] -> PetriNet
+makePetriNetFromStrings name places transitions arcs initial gs fixedTraps fixedSiphons =
             makePetriNet
                 name
                 (map Place (S.toAscList placeSet))
@@ -191,6 +199,8 @@ makePetriNetFromStrings name places transitions arcs initial gs =
                 (map toEitherArc arcs)
                 (map (first Place) initial)
                 (map Transition gs)
+                (map (map Place) fixedTraps)
+                (map (map Place) fixedSiphons)
         where
             placeSet = S.fromList places
             transitionSet = S.fromList transitions
@@ -215,23 +225,25 @@ makePetriNetFromStrings name places transitions arcs initial gs =
 
 makePetriNetWithTrans :: String -> [Place] ->
         [(Transition, ([(Place, Integer)], [(Place, Integer)]))] ->
-        [(Place, Integer)] -> [Transition] -> PetriNet
-makePetriNetWithTrans name places ts =
-            makePetriNet name places (map fst ts) arcs
+        [(Place, Integer)] -> [Transition] -> [Trap] -> [Siphon] ->PetriNet
+makePetriNetWithTrans name places ts fixedTraps fixedSiphons =
+            makePetriNet name places (map fst ts) arcs fixedTraps fixedSiphons
         where
             arcs = [ Right (p,t,w) | (t,(is,_)) <- ts, (p,w) <- is ] ++
                    [ Left  (t,p,w) | (t,(_,os)) <- ts, (p,w) <- os ]
 
 makePetriNetWithTransFromStrings :: String -> [String] ->
         [(String, ([(String, Integer)], [(String, Integer)]))] ->
-        [(String, Integer)] -> [String] -> PetriNet
-makePetriNetWithTransFromStrings name places arcs initial gs =
+        [(String, Integer)] -> [String] -> [[String]] -> [[String]] -> PetriNet
+makePetriNetWithTransFromStrings name places arcs initial gs fixedTraps fixedSiphons =
             makePetriNetWithTrans
                 name
                 (map Place places)
                 (map toTArc arcs)
                 (map (first Place) initial)
                 (map Transition gs)
+                (map (map Place) fixedTraps)
+                (map (map Place) fixedSiphons)
         where
             toTArc (t, (is, os)) =
                 (Transition t, (map (first Place) is, map (first Place) os))

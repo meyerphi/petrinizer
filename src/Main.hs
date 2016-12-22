@@ -158,14 +158,14 @@ transformNet (net, props) TerminationByReachability =
                         [(t, (pre', post')), (primeTransition t, (pre'', post''))]
             ts = (switch, ([(m1,1)], [(m2,1)])) :
                  concatMap transformTransition (transitions net)
-            gs = ghostTransitions net
             prop = Property "termination by reachability" $ Safety $
                     foldl (:&:) (LinearInequation (Var sigma) Ge (Const 1))
                       (map (\p -> LinearInequation
                                 (Var (primePlace p) :-: Var p) Ge (Const 0))
                         (places net))
             -- TODO: map existing liveness properties
-        in  (makePetriNetWithTrans (name net) ps ts is gs, prop : props)
+        in  (makePetriNetWithTrans (name net) ps ts is
+                (ghostTransitions net) (fixedTraps net) (fixedSiphons net), prop : props)
 transformNet (net, props) ValidateIdentifiers =
         (renamePetriNetPlacesAndTransitions validateId net,
          map (renameProperty validateId) props)
@@ -237,7 +237,7 @@ checkProperty net p = do
 checkSafetyProperty :: PetriNet ->
         Formula Place -> OptIO PropResult
 checkSafetyProperty net f = do
-        r <- checkSafetyProperty' net f []
+        r <- checkSafetyProperty' net f (fixedTraps net)
         case r of
             (Nothing, traps) -> do
                 invariant <- opt optInvariant
@@ -447,7 +447,7 @@ checkConstraintProperty net cp =
 
 checkUniqueTerminalMarkingProperty :: PetriNet -> OptIO PropResult
 checkUniqueTerminalMarkingProperty net = do
-        r <- checkUniqueTerminalMarkingProperty' net [] []
+        r <- checkUniqueTerminalMarkingProperty' net (fixedTraps net) (fixedSiphons net)
         case r of
             (Nothing, _, _) -> return Satisfied
             (Just _, _, _) -> return Unknown
