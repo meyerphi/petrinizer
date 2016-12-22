@@ -69,6 +69,9 @@ checkSizeLimit :: SIMap Place -> SIMap Transition -> Maybe (Int, Integer) -> SBo
 checkSizeLimit _ _ Nothing = true
 checkSizeLimit p' _ (Just (_, curSize)) = (.< literal curSize) $ sumVal p'
 
+minimizeMethod :: Int -> Integer -> String
+minimizeMethod _ curSize = "size smaller than" ++ show curSize
+
 checkSComponent :: PetriNet -> FiringVector -> Maybe (Int, Integer) -> SIMap Place ->
         SIMap Transition -> SIMap Transition -> SBool
 checkSComponent net x sizeLimit p' t' y =
@@ -81,17 +84,17 @@ checkSComponent net x sizeLimit p' t' y =
         checkTokens net p' &&&
         checkBinary p' t' y
 
-checkSComponentSat :: PetriNet -> FiringVector -> Maybe (Int, Integer) ->
-        ConstraintProblem Integer (Cut, Integer)
-checkSComponentSat net x sizeLimit =
+checkSComponentSat :: PetriNet -> FiringVector -> MinConstraintProblem Integer Cut Integer
+checkSComponentSat net x =
         let fired = elems x
             p' = makeVarMap $ places net
             t' = makeVarMap $ transitions net
             y = makeVarMapWith prime fired
-        in  ("S-component constraints", "cut",
+        in  (minimizeMethod, \sizeLimit ->
+            ("S-component constraints", "cut",
             getNames p' ++ getNames t' ++ getNames y,
             \fm -> checkSComponent net x sizeLimit (fmap fm p') (fmap fm t') (fmap fm y),
-            \fm -> cutFromAssignment net x (fmap fm p') (fmap fm t') (fmap fm y))
+            \fm -> cutFromAssignment net x (fmap fm p') (fmap fm t') (fmap fm y)))
 
 cutFromAssignment :: PetriNet -> FiringVector -> IMap Place ->
         IMap Transition -> IMap Transition -> (Cut, Integer)

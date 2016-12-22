@@ -26,6 +26,9 @@ checkSizeLimit :: SIMap Place -> Maybe (Int, Integer) -> SBool
 checkSizeLimit _ Nothing = true
 checkSizeLimit b (Just (_, curSize)) = (.< literal curSize) $ sumVal b
 
+minimizeMethod :: Int -> Integer -> String
+minimizeMethod _ curSize = "size smaller than " ++ show curSize
+
 checkBinary :: SIMap Place -> SBool
 checkBinary = bAnd . map (\x -> x .== 0 ||| x .== 1) . vals
 
@@ -37,14 +40,14 @@ checkSubnetEmptyTrap net m x b sizeLimit =
         checkBinary b &&&
         properTrap b
 
-checkSubnetEmptyTrapSat :: PetriNet -> Marking -> FiringVector -> Maybe (Int, Integer) ->
-        ConstraintProblem Integer (Trap, Integer)
-checkSubnetEmptyTrapSat net m x sizeLimit =
+checkSubnetEmptyTrapSat :: PetriNet -> Marking -> FiringVector -> MinConstraintProblem Integer Trap Integer
+checkSubnetEmptyTrapSat net m x =
         let b = makeVarMap $ filter (\p -> val m p == 0) $ mpost net $ elems x
-        in  ("subnet empty trap constraints", "trap",
+        in  (minimizeMethod, \sizeLimit ->
+            ("subnet empty trap constraints", "trap",
             getNames b,
             \fm -> checkSubnetEmptyTrap net m x (fmap fm b) sizeLimit,
-            \fm -> trapFromAssignment (fmap fm b))
+            \fm -> trapFromAssignment (fmap fm b)))
 
 trapFromAssignment :: IMap Place -> (Trap, Integer)
 trapFromAssignment b = (M.keys (M.filter (> 0) b), sum (M.elems b))

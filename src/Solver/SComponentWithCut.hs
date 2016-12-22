@@ -108,6 +108,28 @@ checkSizeLimit p1 p2 t0 t1 t2 (Just (minMethod, (p1Size, p2Size, t0Size, t1Size,
                 9 -> (t1SizeNext + t2SizeNext .> t1SizeNow + t2SizeNow)
                 _ -> error $ "minimization method " ++ show minMethod ++ " not supported"
 
+minimizeMethod :: Int -> SizeIndicator -> String
+minimizeMethod minMethod (p1Size, p2Size, t0Size, t1Size, t2Size) =
+        case minMethod of
+                1 -> "(|t0| < " ++ show t0Size ++ ") || " ++
+                    "(|t0| = " ++ show t0Size ++ " && " ++ "|t1| > " ++ show t1Size ++ " && |t2| >= " ++ show t2Size ++ ") || " ++
+                    "(|t0| = " ++ show t0Size ++ " && " ++ "|t1| >= " ++ show t1Size ++ " && |t2| > " ++ show t2Size ++ ")"
+                2 -> "(|t1| > " ++ show t1Size ++ " && " ++ "|t2| >= " ++ show t2Size ++ ") || " ++
+                     "(|t1| >= " ++ show t1Size ++ " && " ++ "|t2| > " ++ show t2Size ++ ") || " ++
+                     "(|t1| = " ++ show t1Size ++ " && " ++ "|t2| = " ++ show t2Size ++ " && t0 < " ++ show t0Size ++ ")"
+                3 -> "(|p1| + |p2| < " ++ show (p1Size + p2Size) ++ ") || " ++
+                    "(|p1| + |p2| = " ++ show (p1Size + p2Size) ++ " && " ++ "|t0| < " ++ show t0Size ++ ")"
+                4 -> "(|p1| + |p2| > " ++ show (p1Size + p2Size) ++ ") || " ++
+                    "(|p1| + |p2| = " ++ show (p1Size + p2Size) ++ " && " ++ "|t0| < " ++ show t0Size ++ ")"
+                5 -> "(|p1| + |p2| < " ++ show (p1Size + p2Size) ++ ")"
+                6 -> "(|p1| + |p2| > " ++ show (p1Size + p2Size) ++ ")"
+                7 -> "(|t1| > " ++ show t1Size ++ " && |t2| >= " ++ show t2Size ++ ") || " ++
+                     "(|t1| >= " ++ show t1Size ++ " && |t2| > " ++ show t2Size ++ ")"
+                8 -> "(|t1| < " ++ show t1Size ++ " && |t2| <= " ++ show t2Size ++ ") || " ++
+                     "(|t1| <= " ++ show t1Size ++ " && |t2| < " ++ show t2Size ++ ")"
+                9 -> "(|t1| + |t2| > " ++ show (t1Size + t2Size) ++ ")"
+                _ -> error $ "minimization method " ++ show minMethod ++ " not supported"
+
 checkSComponent :: PetriNet -> FiringVector -> Maybe (Int, SizeIndicator) ->
         SIMap Place -> SIMap Place -> SIMap Transition -> SIMap Transition -> SIMap Transition ->
         SBool
@@ -121,20 +143,20 @@ checkSComponent net x sizeLimit p1 p2 t0 t1 t2 =
         checkBinary p1 p2 t0 t1 t2 &&&
         checkDisjunct net p1 p2 t0 t1 t2
 
-checkSComponentWithCutSat :: PetriNet -> FiringVector -> Maybe (Int, SizeIndicator) ->
-        ConstraintProblem Integer (Cut, SizeIndicator)
-checkSComponentWithCutSat net x sizeLimit =
+checkSComponentWithCutSat :: PetriNet -> FiringVector -> MinConstraintProblem Integer Cut SizeIndicator
+checkSComponentWithCutSat net x =
         let p1 = makeVarMapWith ("P1@"++) $ places net
             p2 = makeVarMapWith ("P2@"++) $ places net
             t0 = makeVarMapWith ("T0@"++) $ transitions net
             t1 = makeVarMapWith ("T1@"++) $ transitions net
             t2 = makeVarMapWith ("T2@"++) $ transitions net
-        in  ("general S-component constraints", "cut",
+        in  (minimizeMethod, \sizeLimit ->
+            ("general S-component constraints", "cut",
             getNames p1 ++ getNames p2 ++ getNames t0 ++ getNames t1 ++ getNames t2,
             \fm -> checkSComponent net x sizeLimit
                     (fmap fm p1) (fmap fm p2) (fmap fm t0) (fmap fm t1) (fmap fm t2),
             \fm -> cutFromAssignment
-                    (fmap fm p1) (fmap fm p2) (fmap fm t0) (fmap fm t1) (fmap fm t2))
+                    (fmap fm p1) (fmap fm p2) (fmap fm t0) (fmap fm t1) (fmap fm t2)))
 
 cutFromAssignment ::
         IMap Place -> IMap Place -> IMap Transition -> IMap Transition -> IMap Transition ->

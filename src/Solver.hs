@@ -2,8 +2,7 @@
 
 module Solver
     (prime,checkSat,checkSatMin,val,vals,positiveVal,zeroVal,
-     getNames,
-     ConstraintProblem)
+     getNames,ConstraintProblem,MinConstraintProblem)
 where
 
 import Data.SBV
@@ -16,6 +15,8 @@ import Control.Applicative
 
 type ConstraintProblem a b =
         (String, String, [String], (String -> SBV a) -> SBool, (String -> a) -> b)
+type MinConstraintProblem a b c =
+        (Int -> c -> String, Maybe (Int, c) -> ConstraintProblem a (b, c))
 
 rebuildModel :: SymWord a => [String] -> Either String (Bool, [a]) ->
         Maybe (Model a)
@@ -48,8 +49,8 @@ checkSat (problemName, resultName, vars, constraint, interpretation) = do
                 return $ Just model
 
 checkSatMin :: (SatModel a, SymWord a, Show a, Show b, Show c) =>
-        (Maybe (Int, c) -> ConstraintProblem a (b, c)) -> OptIO (Maybe b)
-checkSatMin minProblem = do
+        MinConstraintProblem a b c -> OptIO (Maybe b)
+checkSatMin (minMethod, minProblem) = do
         optMin <- opt optMinimizeRefinement
         r0 <- checkSat $ minProblem Nothing
         case r0 of
@@ -60,7 +61,7 @@ checkSatMin minProblem = do
                 else
                     return $ Just result
     where findSmaller optMin result curSize = do
-            verbosePut 2 $ "Checking for size smaller than " ++ show curSize
+            verbosePut 2 $ "Checking for " ++ minMethod optMin curSize
             r1 <- checkSat $ minProblem (Just (optMin, curSize))
             case r1 of
                 Nothing -> return result

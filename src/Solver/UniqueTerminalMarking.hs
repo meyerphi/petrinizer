@@ -101,67 +101,87 @@ markingsFromAssignment m0 m1 m2 x1 x2 =
 
 -- trap and siphon refinement constraints
 
-siphonConstraints :: PetriNet -> SBMap Place -> SBool
+siphonConstraints :: PetriNet -> SIMap Place -> SBool
 siphonConstraints net b =
             bAnd $ map siphonConstraint $ transitions net
         where siphonConstraint t =
-                  bOr (mval b (post net t)) ==> bOr (mval b (pre net t))
+                  sum (mval b $ post net t) .> 0 ==> sum (mval b $ pre net t) .> 0
 
-trapConstraints :: PetriNet -> SBMap Place -> SBool
+trapConstraints :: PetriNet -> SIMap Place -> SBool
 trapConstraints net b =
             bAnd $ map trapConstraint $ transitions net
         where trapConstraint t =
-                  bOr (mval b (pre net t)) ==> bOr (mval b (post net t))
+                  sum (mval b $ pre net t) .> 0 ==> sum (mval b $ post net t) .> 0
 
-placesMarkedByMarking :: PetriNet -> RMarking -> SBMap Place -> SBool
-placesMarkedByMarking net m b = bOr $ mval b $ elems m
+placesMarkedByMarking :: PetriNet -> RMarking -> SIMap Place -> SBool
+placesMarkedByMarking net m b = sum (mval b $ elems m) .> 0
 
-placesUnmarkedByMarking :: PetriNet -> RMarking -> SBMap Place -> SBool
-placesUnmarkedByMarking net m b = bAnd $ map (bnot . val b) $ elems m
+placesUnmarkedByMarking :: PetriNet -> RMarking -> SIMap Place -> SBool
+placesUnmarkedByMarking net m b = sum (mval b $ elems m) .== 0
 
-placesPostsetOfSequence :: PetriNet -> RFiringVector -> SBMap Place -> SBool
-placesPostsetOfSequence net x b = bOr $ mval b $ mpost net $ elems x
+placesPostsetOfSequence :: PetriNet -> RFiringVector -> SIMap Place -> SBool
+placesPostsetOfSequence net x b = sum (mval b $ mpost net $ elems x) .> 0
 
-placesPresetOfSequence :: PetriNet -> RFiringVector -> SBMap Place -> SBool
-placesPresetOfSequence net x b = bOr $ mval b $ mpre net $ elems x
+placesPresetOfSequence :: PetriNet -> RFiringVector -> SIMap Place -> SBool
+placesPresetOfSequence net x b = sum (mval b $ mpre net $ elems x) .> 0
 
-nonemptySet :: (Ord a, Show a) => SBMap a -> SBool
-nonemptySet b = bOr $ vals b
+nonemptySet :: (Ord a, Show a) => SIMap a -> SBool
+nonemptySet b = sum (vals b) .> 0
 
-checkUnmarkedTrap :: PetriNet -> RMarking -> RMarking -> RMarking -> RFiringVector -> RFiringVector -> SBMap Place -> SBool
-checkUnmarkedTrap net m0 m1 m2 x1 x2 b =
+checkBinary :: SIMap Place -> SBool
+checkBinary = bAnd . map (\x -> x .== 0 ||| x .== 1) . vals
+
+checkSizeLimit :: SIMap Place -> Maybe (Int, Integer) -> SBool
+checkSizeLimit _ Nothing = true
+checkSizeLimit b (Just (1, curSize)) = (.< literal curSize) $ sumVal b
+checkSizeLimit b (Just (2, curSize)) = (.> literal curSize) $ sumVal b
+checkSizeLimit _ (Just (_, _)) = error "minimization method not supported"
+
+minimizeMethod :: Int -> Integer -> String
+minimizeMethod 1 curSize = "size smaller than " ++ show curSize
+minimizeMethod 2 curSize = "size larger than " ++ show curSize
+minimizeMethod _ _ = error "minimization method not supported"
+
+checkUnmarkedTrap :: PetriNet -> RMarking -> RMarking -> RMarking -> RFiringVector -> RFiringVector -> SIMap Place -> Maybe (Int, Integer) -> SBool
+checkUnmarkedTrap net m0 m1 m2 x1 x2 b sizeLimit =
         trapConstraints net b &&&
         nonemptySet b &&&
+        checkSizeLimit b sizeLimit &&&
+        checkBinary b &&&
         (
             (placesMarkedByMarking net m0 b &&& (placesUnmarkedByMarking net m1 b ||| placesUnmarkedByMarking net m2 b)) |||
             (placesPostsetOfSequence net x1 b &&& placesUnmarkedByMarking net m1 b) |||
             (placesPostsetOfSequence net x2 b &&& placesUnmarkedByMarking net m2 b)
         )
 
-checkUnmarkedTrapSat :: PetriNet -> RMarking -> RMarking -> RMarking -> RFiringVector -> RFiringVector -> ConstraintProblem Bool Trap
+checkUnmarkedTrapSat :: PetriNet -> RMarking -> RMarking -> RMarking -> RFiringVector -> RFiringVector -> MinConstraintProblem Integer Trap Integer
 checkUnmarkedTrapSat net m0 m1 m2 x1 x2 =
         let b = makeVarMap $ places net
-        in  ("trap marked in m and unmarked in m1 or m2, or marked by x1 and unmarked in m1, or marked by x2 and unmarked in m2", "trap",
+        in  (minimizeMethod, \sizeLimit ->
+            ("trap marked in m and unmarked in m1 or m2, or marked by x1 and unmarked in m1, or marked by x2 and unmarked in m2", "trap",
              getNames b,
-             \fm -> checkUnmarkedTrap net m0 m1 m2 x1 x2 (fmap fm b),
-             \fm -> placesFromAssignment (fmap fm b))
+             \fm -> checkUnmarkedTrap net m0 m1 m2 x1 x2 (fmap fm b) sizeLimit,
+             \fm -> placesFromAssignment (fmap fm b)))
 
-checkUnmarkedSiphon :: PetriNet -> RMarking -> RMarking -> RMarking -> RFiringVector -> RFiringVector -> SBMap Place -> SBool
-checkUnmarkedSiphon net m0 m1 m2 x1 x2 b =
+checkUnmarkedSiphon :: PetriNet -> RMarking -> RMarking -> RMarking -> RFiringVector -> RFiringVector -> SIMap Place -> Maybe (Int, Integer) -> SBool
+checkUnmarkedSiphon net m0 m1 m2 x1 x2 b sizeLimit =
         siphonConstraints net b &&&
         nonemptySet b &&&
+        checkSizeLimit b sizeLimit &&&
+        checkBinary b &&&
         (placesUnmarkedByMarking net m0 b &&&
             (placesMarkedByMarking net m1 b ||| placesMarkedByMarking net m2 b |||
              placesPresetOfSequence net x1 b ||| placesPresetOfSequence net x2 b)
         )
 
-checkUnmarkedSiphonSat :: PetriNet -> RMarking -> RMarking -> RMarking -> RFiringVector -> RFiringVector -> ConstraintProblem Bool Siphon
+checkUnmarkedSiphonSat :: PetriNet -> RMarking -> RMarking -> RMarking -> RFiringVector -> RFiringVector -> MinConstraintProblem Integer Siphon Integer
 checkUnmarkedSiphonSat net m0 m1 m2 x1 x2 =
         let b = makeVarMap $ places net
-        in  ("siphon unmarked in m0 and marked in m1 or m2 or used as input in x1 or x2", "siphon",
+        in  (minimizeMethod, \sizeLimit ->
+            ("siphon unmarked in m0 and marked in m1 or m2 or used as input in x1 or x2", "siphon",
              getNames b,
-             \fm -> checkUnmarkedSiphon net m0 m1 m2 x1 x2 (fmap fm b),
-             \fm -> placesFromAssignment (fmap fm b))
+             \fm -> checkUnmarkedSiphon net m0 m1 m2 x1 x2 (fmap fm b) sizeLimit,
+             \fm -> placesFromAssignment (fmap fm b)))
 
-placesFromAssignment :: BMap Place -> Trap
-placesFromAssignment b = M.keys $ M.filter id b
+placesFromAssignment :: IMap Place -> ([Place], Integer)
+placesFromAssignment b = (M.keys (M.filter (> 0) b), sum (M.elems b))

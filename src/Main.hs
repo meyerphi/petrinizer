@@ -470,10 +470,10 @@ refineUniqueTerminalMarkingProperty :: PetriNet ->
         [Trap] -> [Siphon] -> UniqueTerminalMarkingCounterExample ->
         OptIO (Maybe UniqueTerminalMarkingCounterExample, [Trap], [Siphon])
 refineUniqueTerminalMarkingProperty net traps siphons m@(m0, m1, m2, x1, x2) = do
-        r1 <- checkSat $ checkUnmarkedTrapSat net m0 m1 m2 x1 x2
+        r1 <- checkSatMin $ checkUnmarkedTrapSat net m0 m1 m2 x1 x2
         case r1 of
             Nothing -> do
-                r2 <- checkSat $ checkUnmarkedSiphonSat net m0 m1 m2 x1 x2
+                r2 <- checkSatMin $ checkUnmarkedSiphonSat net m0 m1 m2 x1 x2
                 case r2 of
                     Nothing ->
                         return (Just m, traps, siphons)
