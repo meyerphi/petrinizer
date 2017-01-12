@@ -93,9 +93,11 @@ data PropertyType = SafetyType
                   | ConstraintType
 
 data ConstraintProperty = UniqueTerminalMarkingConstraint
+                        | NonConsensusStateConstraint
 
 instance Show ConstraintProperty where
         show UniqueTerminalMarkingConstraint = "unique terminal marking"
+        show NonConsensusStateConstraint = "non-consensus state"
 
 data PropertyContent = Safety (Formula Place)
                   | Liveness (Formula Transition)

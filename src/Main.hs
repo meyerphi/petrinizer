@@ -38,6 +38,7 @@ import Solver.SComponentWithCut
 import Solver.SComponent
 import Solver.Simplifier
 import Solver.UniqueTerminalMarking
+import Solver.NonConsensusState
 --import Solver.Interpolant
 --import Solver.CommFreeReachability
 
@@ -165,7 +166,7 @@ transformNet (net, props) TerminationByReachability =
                         (places net))
             -- TODO: map existing liveness properties
         in  (makePetriNetWithTrans (name net) ps ts is
-                (ghostTransitions net) (fixedTraps net) (fixedSiphons net), prop : props)
+                (ghostTransitions net) (fixedTraps net) (fixedSiphons net) (yesStates net) (noStates net), prop : props)
 transformNet (net, props) ValidateIdentifiers =
         (renamePetriNetPlacesAndTransitions validateId net,
          map (renameProperty validateId) props)
@@ -217,6 +218,8 @@ makeImplicitProperty _ StructCommunicationFree =
         Property "communication free" $ Structural CommunicationFree
 makeImplicitProperty _ UniqueTerminalMarking =
         Property "unique terminal marking" $ Constraint UniqueTerminalMarkingConstraint
+makeImplicitProperty _ NonConsensusState =
+        Property "non-consensus state" $ Constraint NonConsensusStateConstraint
 
 checkProperty :: PetriNet -> Property -> OptIO PropResult
 checkProperty net p = do
@@ -444,6 +447,7 @@ checkConstraintProperty :: PetriNet -> ConstraintProperty -> OptIO PropResult
 checkConstraintProperty net cp =
         case cp of
             UniqueTerminalMarkingConstraint -> checkUniqueTerminalMarkingProperty net
+            NonConsensusStateConstraint -> checkNonConsensusStateProperty net
 
 checkUniqueTerminalMarkingProperty :: PetriNet -> OptIO PropResult
 checkUniqueTerminalMarkingProperty net = do
@@ -459,28 +463,65 @@ checkUniqueTerminalMarkingProperty' net traps siphons = do
         r <- checkSat $ checkUniqueTerminalMarkingSat net traps siphons
         case r of
             Nothing -> return (Nothing, traps, siphons)
-            Just m -> do
+            Just c -> do
                 refine <- opt optRefinementType
                 if isJust refine then
-                    refineUniqueTerminalMarkingProperty net traps siphons m
+                    refineUniqueTerminalMarkingProperty net traps siphons c
                 else
-                    return (Just m, traps, siphons)
+                    return (Just c, traps, siphons)
 
 refineUniqueTerminalMarkingProperty :: PetriNet ->
         [Trap] -> [Siphon] -> UniqueTerminalMarkingCounterExample ->
         OptIO (Maybe UniqueTerminalMarkingCounterExample, [Trap], [Siphon])
-refineUniqueTerminalMarkingProperty net traps siphons m@(m0, m1, m2, x1, x2) = do
-        r1 <- checkSatMin $ checkUnmarkedTrapSat net m0 m1 m2 x1 x2
+refineUniqueTerminalMarkingProperty net traps siphons c@(m0, m1, m2, x1, x2) = do
+        r1 <- checkSatMin $ Solver.UniqueTerminalMarking.checkUnmarkedTrapSat net m0 m1 m2 x1 x2
         case r1 of
             Nothing -> do
-                r2 <- checkSatMin $ checkUnmarkedSiphonSat net m0 m1 m2 x1 x2
+                r2 <- checkSatMin $ Solver.UniqueTerminalMarking.checkUnmarkedSiphonSat net m0 m1 m2 x1 x2
                 case r2 of
                     Nothing ->
-                        return (Just m, traps, siphons)
+                        return (Just c, traps, siphons)
                     Just siphon ->
                         checkUniqueTerminalMarkingProperty' net traps (siphon:siphons)
             Just trap ->
                 checkUniqueTerminalMarkingProperty' net (trap:traps) siphons
+
+checkNonConsensusStateProperty :: PetriNet -> OptIO PropResult
+checkNonConsensusStateProperty net = do
+        r <- checkNonConsensusStateProperty' net (fixedTraps net) (fixedSiphons net)
+        case r of
+            (Nothing, _, _) -> return Satisfied
+            (Just _, _, _) -> return Unknown
+
+checkNonConsensusStateProperty' :: PetriNet ->
+        [Trap] -> [Siphon] ->
+        OptIO (Maybe NonConsensusStateCounterExample, [Trap], [Siphon])
+checkNonConsensusStateProperty' net traps siphons = do
+        r <- checkSat $ checkNonConsensusStateSat net traps siphons
+        case r of
+            Nothing -> return (Nothing, traps, siphons)
+            Just c -> do
+                refine <- opt optRefinementType
+                if isJust refine then
+                    refineNonConsensusStateProperty net traps siphons c
+                else
+                    return (Just c, traps, siphons)
+
+refineNonConsensusStateProperty :: PetriNet ->
+        [Trap] -> [Siphon] -> NonConsensusStateCounterExample ->
+        OptIO (Maybe NonConsensusStateCounterExample, [Trap], [Siphon])
+refineNonConsensusStateProperty net traps siphons c@(m0, m, x) = do
+        r1 <- checkSatMin $ Solver.NonConsensusState.checkUnmarkedTrapSat net m0 m x
+        case r1 of
+            Nothing -> do
+                r2 <- checkSatMin $ Solver.NonConsensusState.checkUnmarkedSiphonSat net m0 m x
+                case r2 of
+                    Nothing ->
+                        return (Just c, traps, siphons)
+                    Just siphon ->
+                        checkNonConsensusStateProperty' net traps (siphon:siphons)
+            Just trap ->
+                checkNonConsensusStateProperty' net (trap:traps) siphons
 
 main :: IO ()
 main = do

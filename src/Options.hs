@@ -32,6 +32,7 @@ data ImplicitProperty = Termination
                       | StructFinalPlace
                       | StructCommunicationFree
                       | UniqueTerminalMarking
+                      | NonConsensusState
                       deriving (Show,Read)
 
 data RefinementType = TrapRefinement | SComponentRefinement | SComponentWithCutRefinement
@@ -183,6 +184,12 @@ options =
                    optProperties = UniqueTerminalMarking : optProperties opt
                }))
         "Prove that all markings of the net have a unique terminal marking"
+
+        , Option "" ["non-consensus-state"]
+        (NoArg (\opt -> Right opt {
+                   optProperties = NonConsensusState : optProperties opt
+               }))
+        "Prove that no non-consensus terminal state is reachable from an initial marking"
 
         , Option "i" ["invariant"]
         (NoArg (\opt -> Right opt { optInvariant = True }))

@@ -87,6 +87,12 @@ trap = reserved "trap" *> identList
 siphon :: Parser [String]
 siphon = reserved "siphon" *> identList
 
+yesStates :: Parser [String]
+yesStates = reserved "yes" *> identList
+
+noStates :: Parser [String]
+noStates = reserved "no" *> identList
+
 arc :: Parser [(String,String,Integer)]
 arc = do
         lhs <- identList
@@ -108,7 +114,8 @@ arcs = do
 
 data Statement = Places [String] | Transitions [String] |
                  Arcs [(String,String,Integer)] | Initial [(String,Integer)] |
-                 TrapStatement [String] | SiphonStatement [String]
+                 TrapStatement [String] | SiphonStatement [String] |
+                 YesStatement [String] | NoStatement [String]
 
 statement :: Parser Statement
 statement = Places <$> places <|>
@@ -116,7 +123,9 @@ statement = Places <$> places <|>
             Arcs <$> arcs <|>
             Initial <$> initial <|>
             TrapStatement <$> trap <|>
-            SiphonStatement <$> siphon
+            SiphonStatement <$> siphon <|>
+            YesStatement <$> yesStates <|>
+            NoStatement <$> noStates
 
 petriNet :: Parser PetriNet
 petriNet = do
@@ -124,16 +133,18 @@ petriNet = do
             reserved "net"
             name <- option "" ident
             statements <- braces (many statement)
-            let (p,t,a,i,traps,siphons) = foldl splitStatement ([],[],[],[],[],[]) statements
-            return $ makePetriNetFromStrings name p t a i [] traps siphons
+            let (p,t,a,i,traps,siphons,yesStates,noStates) = foldl splitStatement ([],[],[],[],[],[],[],[]) statements
+            return $ makePetriNetFromStrings name p t a i [] traps siphons yesStates noStates
         where
-            splitStatement (ps,ts,as,is,traps,siphons) stmnt = case stmnt of
-                  Places p -> (p ++ ps,ts,as,is,traps,siphons)
-                  Transitions t -> (ps,t ++ ts,as,is,traps,siphons)
-                  Arcs a -> (ps,ts,a ++ as,is,traps,siphons)
-                  Initial i -> (ps,ts,as,i ++ is,traps,siphons)
-                  TrapStatement trap -> (ps,ts,as,is,trap:traps,siphons)
-                  SiphonStatement siphon -> (ps,ts,as,is,traps,siphon:siphons)
+            splitStatement (ps,ts,as,is,traps,siphons,ys,ns) stmnt = case stmnt of
+                  Places p -> (p ++ ps,ts,as,is,traps,siphons,ys,ns)
+                  Transitions t -> (ps,t ++ ts,as,is,traps,siphons,ys,ns)
+                  Arcs a -> (ps,ts,a ++ as,is,traps,siphons,ys,ns)
+                  Initial i -> (ps,ts,as,i ++ is,traps,siphons,ys,ns)
+                  TrapStatement trap -> (ps,ts,as,is,trap:traps,siphons,ys,ns)
+                  SiphonStatement siphon -> (ps,ts,as,is,traps,siphon:siphons,ys,ns)
+                  YesStatement y -> (ps,ts,as,is,traps,siphons,y ++ ys,ns)
+                  NoStatement n -> (ps,ts,as,is,traps,siphons,ys,n ++ ns)
 
 binary :: String -> (a -> a -> a) -> Assoc -> Operator String () Identity a
 binary name fun = Infix  ( reservedOp name *> return fun )
