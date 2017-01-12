@@ -50,8 +50,8 @@ checkTrap net m0 m1 m2 x1 x2 trap =
             (markedByMarking m0 ==> (markedByMarking m1 &&& markedByMarking m2)) &&&
             (markedBySequence x1 ==> markedByMarking m1) &&&
             (markedBySequence x2 ==> markedByMarking m2)
-        where markedByMarking m = sum (map (val m) trap) .> 0
-              markedBySequence x = sum (map (val x) (mpre net trap)) .> 0
+        where markedByMarking m = sum (mval m trap) .> 0
+              markedBySequence x = sum (mval x (mpre net trap)) .> 0
 
 checkTrapConstraints :: PetriNet -> SRMap Place -> SRMap Place -> SRMap Place -> SRMap Transition -> SRMap Transition -> [Trap] -> SBool
 checkTrapConstraints net m0 m1 m2 x1 x2 traps =
@@ -60,8 +60,8 @@ checkTrapConstraints net m0 m1 m2 x1 x2 traps =
 checkSiphon :: PetriNet -> SRMap Place -> SRMap Place -> SRMap Place -> SRMap Transition -> SRMap Transition -> Siphon -> SBool
 checkSiphon net m0 m1 m2 x1 x2 siphon =
             unmarkedByMarking m0 ==> (unmarkedByMarking m1 &&& unmarkedByMarking m2 &&& notPresetOfSequence x1 &&& notPresetOfSequence x2)
-        where unmarkedByMarking m = sum (map (val m) siphon) .== 0
-              notPresetOfSequence x = sum (map (val x) (mpost net siphon)) .== 0
+        where unmarkedByMarking m = sum (mval m siphon) .== 0
+              notPresetOfSequence x = sum (mval x (mpost net siphon)) .== 0
 
 checkSiphonConstraints :: PetriNet -> SRMap Place -> SRMap Place -> SRMap Place -> SRMap Transition -> SRMap Transition -> [Siphon] -> SBool
 checkSiphonConstraints net m0 m1 m2 x1 x2 siphons =
