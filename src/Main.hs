@@ -26,6 +26,7 @@ import qualified Printer.SPEC as SPECPrinter
 import qualified Printer.DOT as DOTPrinter
 import Property
 import Structure
+import StructuralComputation
 import Solver
 import Solver.StateEquation
 import Solver.TrapConstraints
@@ -39,6 +40,7 @@ import Solver.SComponent
 import Solver.Simplifier
 import Solver.UniqueTerminalMarking
 import Solver.NonConsensusState
+import Solver.TerminalMarkingReachable
 --import Solver.Interpolant
 --import Solver.CommFreeReachability
 
@@ -220,6 +222,8 @@ makeImplicitProperty _ UniqueTerminalMarking =
         Property "unique terminal marking" $ Constraint UniqueTerminalMarkingConstraint
 makeImplicitProperty _ NonConsensusState =
         Property "non-consensus state" $ Constraint NonConsensusStateConstraint
+makeImplicitProperty _ TerminalMarkingReachable =
+        Property "terminal marking reachable" $ Constraint TerminalMarkingReachableConstraint
 
 checkProperty :: PetriNet -> Property -> OptIO PropResult
 checkProperty net p = do
@@ -448,6 +452,7 @@ checkConstraintProperty net cp =
         case cp of
             UniqueTerminalMarkingConstraint -> checkUniqueTerminalMarkingProperty net
             NonConsensusStateConstraint -> checkNonConsensusStateProperty net
+            TerminalMarkingReachableConstraint -> checkTerminalMarkingReachableProperty net
 
 checkUniqueTerminalMarkingProperty :: PetriNet -> OptIO PropResult
 checkUniqueTerminalMarkingProperty net = do
@@ -522,6 +527,32 @@ refineNonConsensusStateProperty net traps siphons c@(m0, m, x) = do
                         checkNonConsensusStateProperty' net traps (siphon:siphons)
             Just trap ->
                 checkNonConsensusStateProperty' net (trap:traps) siphons
+
+checkTerminalMarkingReachableProperty :: PetriNet -> OptIO PropResult
+checkTerminalMarkingReachableProperty net = do
+        let triplets = generateTriplets net
+        let trivialTriplets = filter trivialTriplet triplets
+        let nonTrivialTriplets = filter (not . trivialTriplet) triplets
+        let emptyTriplets = filter emptyTriplet triplets
+        let nonTrivialNonEmptyTriplets = filter (not . emptyTriplet) nonTrivialTriplets
+        liftIO $ putStrLn $ "All triplets (" ++ show (length triplets) ++ "):"
+        liftIO $ putStrLn $ unlines $ map show triplets
+        liftIO $ putStrLn $ "Trivial triplets (" ++ show (length trivialTriplets) ++ "):"
+        liftIO $ putStrLn $ unlines $ map show trivialTriplets
+        liftIO $ putStrLn $ "Empty triplets (" ++ show (length emptyTriplets) ++ "):"
+        liftIO $ putStrLn $ unlines $ map show emptyTriplets
+        liftIO $ putStrLn $ "Non-trivial, non-empty triplets (" ++ show (length nonTrivialNonEmptyTriplets) ++ "):"
+        liftIO $ putStrLn $ unlines $ map show nonTrivialNonEmptyTriplets
+        return Satisfied
+        r <- checkSat $ checkTerminalMarkingReachableSat net nonTrivialTriplets 2
+        case r of
+            Nothing -> return Unknown
+            Just inv -> do
+                invariant <- opt optInvariant
+                if invariant then
+                    printInvariant (Just inv, [])
+                else
+                    return Satisfied
 
 main :: IO ()
 main = do

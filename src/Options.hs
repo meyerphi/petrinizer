@@ -33,6 +33,7 @@ data ImplicitProperty = Termination
                       | StructCommunicationFree
                       | UniqueTerminalMarking
                       | NonConsensusState
+                      | TerminalMarkingReachable
                       deriving (Show,Read)
 
 data RefinementType = TrapRefinement | SComponentRefinement | SComponentWithCutRefinement
@@ -190,6 +191,12 @@ options =
                    optProperties = NonConsensusState : optProperties opt
                }))
         "Prove that no non-consensus terminal state is reachable from an initial marking"
+
+        , Option "" ["terminal-marking-reachable"]
+        (NoArg (\opt -> Right opt {
+                   optProperties = TerminalMarkingReachable : optProperties opt
+               }))
+        "Prove that a terminal marking is reachable"
 
         , Option "i" ["invariant"]
         (NoArg (\opt -> Right opt { optInvariant = True }))
