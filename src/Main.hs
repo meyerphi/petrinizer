@@ -5,7 +5,7 @@ import System.IO
 import Control.Monad
 import Control.Concurrent.ParallelIO
 import Control.Arrow (first)
-import Data.List (partition,minimumBy)
+import Data.List (partition,minimumBy,genericLength)
 import Data.Ord (comparing)
 import Data.Maybe
 import qualified Data.ByteString.Lazy as L
@@ -535,18 +535,27 @@ checkTerminalMarkingReachableProperty net = do
         let nonTrivialTriplets = filter (not . trivialTriplet) triplets
         let emptyTriplets = filter emptyTriplet triplets
         let nonTrivialNonEmptyTriplets = filter (not . emptyTriplet) nonTrivialTriplets
-        liftIO $ putStrLn $ "All triplets (" ++ show (length triplets) ++ "):"
-        liftIO $ putStrLn $ unlines $ map show triplets
-        liftIO $ putStrLn $ "Trivial triplets (" ++ show (length trivialTriplets) ++ "):"
-        liftIO $ putStrLn $ unlines $ map show trivialTriplets
-        liftIO $ putStrLn $ "Empty triplets (" ++ show (length emptyTriplets) ++ "):"
-        liftIO $ putStrLn $ unlines $ map show emptyTriplets
-        liftIO $ putStrLn $ "Non-trivial, non-empty triplets (" ++ show (length nonTrivialNonEmptyTriplets) ++ "):"
-        liftIO $ putStrLn $ unlines $ map show nonTrivialNonEmptyTriplets
-        return Satisfied
-        r <- checkSat $ checkTerminalMarkingReachableSat net nonTrivialTriplets 2
+--      TODO optimize triplet computation
+--        liftIO $ putStrLn $ "All triplets (" ++ show (length triplets) ++ "):"
+--        liftIO $ putStrLn $ unlines $ map show triplets
+--        liftIO $ putStrLn $ "Trivial triplets (" ++ show (length trivialTriplets) ++ "):"
+--        liftIO $ putStrLn $ unlines $ map show trivialTriplets
+--        liftIO $ putStrLn $ "Empty triplets (" ++ show (length emptyTriplets) ++ "):"
+--        liftIO $ putStrLn $ unlines $ map show emptyTriplets
+--        liftIO $ putStrLn $ "Non-trivial, non-empty triplets (" ++ show (length nonTrivialNonEmptyTriplets) ++ "):"
+--        liftIO $ putStrLn $ unlines $ map show nonTrivialNonEmptyTriplets
+        checkTerminalMarkingReachableProperty' net nonTrivialTriplets 1 $ genericLength $ transitions net
+
+checkTerminalMarkingReachableProperty' :: PetriNet -> [Triplet] -> Integer -> Integer -> OptIO PropResult
+checkTerminalMarkingReachableProperty' net triplets k kmax = do
+        verbosePut 1 $ "Checking terminal marking reachable with at most " ++ show k ++ " partitions"
+        r <- checkSat $ checkTerminalMarkingReachableSat net triplets k
         case r of
-            Nothing -> return Unknown
+            Nothing ->
+                if k < kmax then
+                    checkTerminalMarkingReachableProperty' net triplets (k + 1) kmax
+                else
+                    return Unknown
             Just inv -> do
                 invariant <- opt optInvariant
                 if invariant then

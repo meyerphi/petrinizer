@@ -10,6 +10,7 @@ import qualified Data.Map as M
 
 type Triplet = (Transition, Transition, [Transition])
 
+-- TODO: optimize
 generateTriplets :: PetriNet -> [Triplet]
 generateTriplets net =
         let
