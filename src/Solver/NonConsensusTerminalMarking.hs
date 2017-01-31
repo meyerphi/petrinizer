@@ -1,8 +1,8 @@
 {-# LANGUAGE FlexibleContexts #-}
 
-module Solver.NonConsensusState
-    (checkNonConsensusStateSat,
-     NonConsensusStateCounterExample,
+module Solver.NonConsensusTerminalMarking
+    (checkNonConsensusTerminalMarkingSat,
+     NonConsensusTerminalMarkingCounterExample,
      checkUnmarkedTrapSat,
      checkUnmarkedSiphonSat)
 where
@@ -16,7 +16,7 @@ import PetriNet
 import Property
 import Solver
 
-type NonConsensusStateCounterExample = (RMarking, RMarking, RFiringVector)
+type NonConsensusTerminalMarkingCounterExample = (RMarking, RMarking, RFiringVector)
 
 stateEquationConstraints :: PetriNet -> SRMap Place -> SRMap Place -> SRMap Transition -> SBool
 stateEquationConstraints net m0 m x =
@@ -68,8 +68,8 @@ checkSiphonConstraints :: PetriNet -> SRMap Place -> SRMap Place -> SRMap Transi
 checkSiphonConstraints net m0 m x siphons =
         bAnd $ map (checkSiphon net m0 m x) siphons
 
-checkNonConsensusState :: PetriNet -> SRMap Place -> SRMap Place -> SRMap Transition -> [Trap] -> [Siphon] -> SBool
-checkNonConsensusState net m0 m x traps siphons =
+checkNonConsensusTerminalMarking :: PetriNet -> SRMap Place -> SRMap Place -> SRMap Transition -> [Trap] -> [Siphon] -> SBool
+checkNonConsensusTerminalMarking net m0 m x traps siphons =
         stateEquationConstraints net m0 m x &&&
         nonNegativityConstraints m0 &&&
         nonNegativityConstraints m &&&
@@ -80,17 +80,17 @@ checkNonConsensusState net m0 m x traps siphons =
         checkTrapConstraints net m0 m x traps &&&
         checkSiphonConstraints net m0 m x siphons
 
-checkNonConsensusStateSat :: PetriNet -> [Trap] -> [Siphon] -> ConstraintProblem AlgReal NonConsensusStateCounterExample
-checkNonConsensusStateSat net traps siphons =
+checkNonConsensusTerminalMarkingSat :: PetriNet -> [Trap] -> [Siphon] -> ConstraintProblem AlgReal NonConsensusTerminalMarkingCounterExample
+checkNonConsensusTerminalMarkingSat net traps siphons =
         let m0 = makeVarMap $ places net
             m = makeVarMapWith prime $ places net
             x = makeVarMap $ transitions net
         in  ("non-consensus state", "(m0, m, x)",
              getNames m0 ++ getNames m ++ getNames x,
-             \fm -> checkNonConsensusState net (fmap fm m0) (fmap fm m) (fmap fm x) traps siphons,
+             \fm -> checkNonConsensusTerminalMarking net (fmap fm m0) (fmap fm m) (fmap fm x) traps siphons,
              \fm -> markingsFromAssignment (fmap fm m0) (fmap fm m) (fmap fm x))
 
-markingsFromAssignment :: RMap Place -> RMap Place -> RMap Transition -> NonConsensusStateCounterExample
+markingsFromAssignment :: RMap Place -> RMap Place -> RMap Transition -> NonConsensusTerminalMarkingCounterExample
 markingsFromAssignment m0 m x =
         (makeVector m0, makeVector m, makeVector x)
 
