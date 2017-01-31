@@ -1,21 +1,22 @@
 {-# LANGUAGE FlexibleContexts #-}
 
-module Solver.UniqueTerminalMarking
-    (checkUniqueTerminalMarkingSat,
-     UniqueTerminalMarkingCounterExample,
+module Solver.TerminalMarkingsUniqueConsensus
+    (checkTerminalMarkingsUniqueConsensusSat,
+     TerminalMarkingsUniqueConsensusCounterExample,
      checkUnmarkedTrapSat,
      checkUnmarkedSiphonSat)
 where
 
 import Data.SBV
 import qualified Data.Map as M
+import Data.List ((\\))
 
 import Util
 import PetriNet
 import Property
 import Solver
 
-type UniqueTerminalMarkingCounterExample = (Marking, Marking, Marking, FiringVector, FiringVector)
+type TerminalMarkingsUniqueConsensusCounterExample = (Marking, Marking, Marking, FiringVector, FiringVector)
 
 stateEquationConstraints :: PetriNet -> SIMap Place -> SIMap Place -> SIMap Transition -> SBool
 stateEquationConstraints net m0 m x =
@@ -37,13 +38,14 @@ terminalConstraints net m =
         where checkTransition t = bOr $ map checkPlace $ lpre net t
               checkPlace (p,w) = val m p .<= literal (fromInteger (w - 1))
 
-nonEqualityConstraints :: (Ord a, Show a) => PetriNet -> SIMap a -> SIMap a -> SBool
-nonEqualityConstraints net m1 m2 =
-            if elemsSet m1 /= elemsSet m2 then
-                false
-            else
-                bOr $ map checkNonEquality $ elems m1
-        where checkNonEquality x = val m1 x ./= val m2 x
+initialMarkingConstraints :: PetriNet -> SIMap Place -> SBool
+initialMarkingConstraints net m0 =
+        sum (mval m0 (places net \\ initials net)) .== 0
+
+differentConsensusConstraints :: PetriNet -> SIMap Place -> SIMap Place -> SBool
+differentConsensusConstraints net m1 m2 =
+        (sum (mval m1 (yesStates net)) .> 0 &&& sum (mval m2 (noStates net)) .> 0) |||
+        (sum (mval m1 (noStates net)) .> 0 &&& sum (mval m2 (yesStates net)) .> 0)
 
 checkTrap :: PetriNet -> SIMap Place -> SIMap Place -> SIMap Place -> SIMap Transition -> SIMap Transition -> Trap -> SBool
 checkTrap net m0 m1 m2 x1 x2 trap =
@@ -67,10 +69,11 @@ checkSiphonConstraints :: PetriNet -> SIMap Place -> SIMap Place -> SIMap Place 
 checkSiphonConstraints net m0 m1 m2 x1 x2 siphons =
         bAnd $ map (checkSiphon net m0 m1 m2 x1 x2) siphons
 
-checkUniqueTerminalMarking :: PetriNet -> SIMap Place -> SIMap Place -> SIMap Place -> SIMap Transition -> SIMap Transition ->
+checkTerminalMarkingsUniqueConsensus :: PetriNet -> SIMap Place -> SIMap Place -> SIMap Place -> SIMap Transition -> SIMap Transition ->
         [Trap] -> [Siphon] -> SBool
-checkUniqueTerminalMarking net m0 m1 m2 x1 x2 traps siphons =
-        nonEqualityConstraints net m1 m2 &&&
+checkTerminalMarkingsUniqueConsensus net m0 m1 m2 x1 x2 traps siphons =
+        initialMarkingConstraints net m0 &&&
+        differentConsensusConstraints net m1 m2 &&&
         stateEquationConstraints net m0 m1 x1 &&&
         stateEquationConstraints net m0 m2 x2 &&&
         nonNegativityConstraints m0 &&&
@@ -83,8 +86,8 @@ checkUniqueTerminalMarking net m0 m1 m2 x1 x2 traps siphons =
         checkTrapConstraints net m0 m1 m2 x1 x2 traps &&&
         checkSiphonConstraints net m0 m1 m2 x1 x2 siphons
 
-checkUniqueTerminalMarkingSat :: PetriNet -> [Trap] -> [Siphon] -> ConstraintProblem Integer UniqueTerminalMarkingCounterExample
-checkUniqueTerminalMarkingSat net traps siphons =
+checkTerminalMarkingsUniqueConsensusSat :: PetriNet -> [Trap] -> [Siphon] -> ConstraintProblem Integer TerminalMarkingsUniqueConsensusCounterExample
+checkTerminalMarkingsUniqueConsensusSat net traps siphons =
         let m0 = makeVarMap $ places net
             m1 = makeVarMapWith prime $ places net
             m2 = makeVarMapWith (prime . prime) $ places net
@@ -92,10 +95,10 @@ checkUniqueTerminalMarkingSat net traps siphons =
             x2 = makeVarMapWith prime $ transitions net
         in  ("unique terminal marking", "(m0, m1, m2, x1, x2)",
              getNames m0 ++ getNames m1 ++ getNames m2 ++ getNames x1 ++ getNames x2,
-             \fm -> checkUniqueTerminalMarking net (fmap fm m0) (fmap fm m1) (fmap fm m2) (fmap fm x1) (fmap fm x2) traps siphons,
+             \fm -> checkTerminalMarkingsUniqueConsensus net (fmap fm m0) (fmap fm m1) (fmap fm m2) (fmap fm x1) (fmap fm x2) traps siphons,
              \fm -> markingsFromAssignment (fmap fm m0) (fmap fm m1) (fmap fm m2) (fmap fm x1) (fmap fm x2))
 
-markingsFromAssignment :: IMap Place -> IMap Place -> IMap Place -> IMap Transition -> IMap Transition -> UniqueTerminalMarkingCounterExample
+markingsFromAssignment :: IMap Place -> IMap Place -> IMap Place -> IMap Transition -> IMap Transition -> TerminalMarkingsUniqueConsensusCounterExample
 markingsFromAssignment m0 m1 m2 x1 x2 =
         (makeVector m0, makeVector m1, makeVector m2, makeVector x1, makeVector x2)
 

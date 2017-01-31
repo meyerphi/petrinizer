@@ -92,12 +92,12 @@ data PropertyType = SafetyType
                   | StructuralType
                   | ConstraintType
 
-data ConstraintProperty = UniqueTerminalMarkingConstraint
+data ConstraintProperty = TerminalMarkingsUniqueConsensusConstraint
                         | NonConsensusStateConstraint
                         | TerminalMarkingReachableConstraint
 
 instance Show ConstraintProperty where
-        show UniqueTerminalMarkingConstraint = "unique terminal marking"
+        show TerminalMarkingsUniqueConsensusConstraint = "terminal markings have a unique consensus"
         show NonConsensusStateConstraint = "non-consensus state"
         show TerminalMarkingReachableConstraint = "terminal marking reachable"
 

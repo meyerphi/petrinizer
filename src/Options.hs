@@ -31,7 +31,7 @@ data ImplicitProperty = Termination
                       | StructParallel
                       | StructFinalPlace
                       | StructCommunicationFree
-                      | UniqueTerminalMarking
+                      | TerminalMarkingsUniqueConsensus
                       | NonConsensusState
                       | TerminalMarkingReachable
                       deriving (Show,Read)
@@ -180,11 +180,11 @@ options =
                }))
         "Prove that the net is communication-free"
 
-        , Option "" ["unique-terminal-marking"]
+        , Option "" ["terminal-markings-unique-consensus"]
         (NoArg (\opt -> Right opt {
-                   optProperties = UniqueTerminalMarking : optProperties opt
+                   optProperties = TerminalMarkingsUniqueConsensus : optProperties opt
                }))
-        "Prove that all markings of the net have a unique terminal marking"
+        "Prove that terminal markings have a unique consensus"
 
         , Option "" ["non-consensus-state"]
         (NoArg (\opt -> Right opt {
