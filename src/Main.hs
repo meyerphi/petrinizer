@@ -530,20 +530,7 @@ refineNonConsensusTerminalMarkingProperty net traps siphons c@(m0, m, x) = do
 
 checkTerminalMarkingReachableProperty :: PetriNet -> OptIO PropResult
 checkTerminalMarkingReachableProperty net = do
-        let triplets = generateTriplets net
-        let trivialTriplets = filter trivialTriplet triplets
-        let nonTrivialTriplets = filter (not . trivialTriplet) triplets
-        let emptyTriplets = filter emptyTriplet triplets
-        let nonTrivialNonEmptyTriplets = filter (not . emptyTriplet) nonTrivialTriplets
---      TODO optimize triplet computation
---        liftIO $ putStrLn $ "All triplets (" ++ show (length triplets) ++ "):"
---        liftIO $ putStrLn $ unlines $ map show triplets
---        liftIO $ putStrLn $ "Trivial triplets (" ++ show (length trivialTriplets) ++ "):"
---        liftIO $ putStrLn $ unlines $ map show trivialTriplets
---        liftIO $ putStrLn $ "Empty triplets (" ++ show (length emptyTriplets) ++ "):"
---        liftIO $ putStrLn $ unlines $ map show emptyTriplets
---        liftIO $ putStrLn $ "Non-trivial, non-empty triplets (" ++ show (length nonTrivialNonEmptyTriplets) ++ "):"
---        liftIO $ putStrLn $ unlines $ map show nonTrivialNonEmptyTriplets
+        let nonTrivialTriplets = filter (not . trivialTriplet) $ generateTriplets net
         checkTerminalMarkingReachableProperty' net nonTrivialTriplets 1 $ genericLength $ transitions net
 
 checkTerminalMarkingReachableProperty' :: PetriNet -> [Triplet] -> Integer -> Integer -> OptIO PropResult

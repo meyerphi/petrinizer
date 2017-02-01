@@ -10,7 +10,6 @@ import qualified Data.Map as M
 
 type Triplet = (Transition, Transition, [Transition])
 
--- TODO: optimize
 generateTriplets :: PetriNet -> [Triplet]
 generateTriplets net =
         let
@@ -27,7 +26,7 @@ generateTriplets net =
                     (tPre, tPost) = prePostMultisets M.! t
                     stSet = M.unionWith (+) sPre (M.differenceWith multiSetDifference tPre sPost)
                 in
-                    [t' | t' <- transitions net, t' /= s, checkTriple stSet t']
+                    [t' | t' <- mpost net (M.keys stSet), t' /= s, checkTriple stSet t']
             checkTriple stMultiset t' =
                 let
                     (tPre, _) = prePostMultisets M.! t'
@@ -35,7 +34,7 @@ generateTriplets net =
                 in
                     M.null differenceMultiset
         in
-            [(s, t, findT' s t) | s <- transitions net, t <- transitions net, s /= t]
+            [(s, t, findT' s t) | s <- transitions net, t <- mpost net (post net s), s /= t]
 
 trivialTriplet :: Triplet -> Bool
 trivialTriplet (_, t, ts) = elem t ts
