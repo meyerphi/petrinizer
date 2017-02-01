@@ -24,8 +24,8 @@ instance Invariant BlockInvariant where
 
 instance Show BlockInvariant where
         show (BlockInvariant (i, ti, yi)) =
-                "T_" ++ show i ++ ": " ++ show ti ++
-                    (if null ti then "" else " => " ++ intercalate " + " (map showWeighted (items yi)))
+                "T_" ++ show i ++ ":\n" ++ unlines (map show ti) ++
+                    (if null ti then "" else "\nY_" ++ show i ++ ": " ++ intercalate " + " (map showWeighted (items yi)) ++ "\n")
 
 nonNegativityConstraints :: (Ord a, Show a) => SIMap a -> SBool
 nonNegativityConstraints m =
