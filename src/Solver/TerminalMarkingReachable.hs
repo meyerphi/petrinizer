@@ -59,23 +59,44 @@ blockOrderConstraints net triplets k b =
             bAnd $ map checkTriplet triplets
         where checkTriplet (s,t,ts) = (val b s .> val b t) ==> bOr (map (\t' -> val b t' .== val b t) ts)
 
-checkTerminalMarkingReachable :: PetriNet -> [Triplet] -> Integer -> SIMap Transition -> [SIMap Place] -> SBool
-checkTerminalMarkingReachable net triplets k b ys =
+checkTerminalMarkingReachable :: PetriNet -> [Triplet] -> Integer -> SIMap Transition -> [SIMap Place] -> Maybe (Int, (Int, [Int])) -> SBool
+checkTerminalMarkingReachable net triplets k b ys sizeLimit =
         blockConstraints net k b &&&
         terminationConstraints net k b ys &&&
         blockOrderConstraints net triplets k b &&&
-        checkNonNegativityConstraints ys
+        checkNonNegativityConstraints ys &&&
+        checkSizeLimit k b ys sizeLimit
 
-checkTerminalMarkingReachableSat :: PetriNet -> [Triplet] -> Integer -> ConstraintProblem Integer TerminalMarkingReachableInvariant
+checkTerminalMarkingReachableSat :: PetriNet -> [Triplet] -> Integer -> MinConstraintProblem Integer TerminalMarkingReachableInvariant (Int, [Int])
 checkTerminalMarkingReachableSat net triplets k =
         let makeYName i = (++) (genericReplicate i '\'')
             ys = [makeVarMapWith (makeYName i) $ places net | i <- [1..k]]
             b = makeVarMap $ transitions net
-        in  ("terminal marking reachable", "invariant",
+        in  (minimizeMethod, \sizeLimit ->
+            ("terminal marking reachable", "invariant",
              concat (map getNames ys) ++ getNames b,
-             \fm -> checkTerminalMarkingReachable net triplets k (fmap fm b) (map (fmap fm) ys),
-             \fm -> invariantFromAssignment net k (fmap fm b) (map (fmap fm) ys))
+             \fm -> checkTerminalMarkingReachable net triplets k (fmap fm b) (map (fmap fm) ys) sizeLimit,
+             \fm -> invariantFromAssignment net k (fmap fm b) (map (fmap fm) ys)))
 
-invariantFromAssignment :: PetriNet -> Integer -> IMap Transition -> [IMap Place] -> TerminalMarkingReachableInvariant
+minimizeMethod :: Int -> (Int, [Int]) -> String
+minimizeMethod 1 (curYSize, _) = "number of places in y less than " ++ show curYSize
+minimizeMethod 2 (_, curTSize) = "number of transitions in last block less than " ++ show (last curTSize)
+minimizeMethod 3 (curYSize, curTSize) = "number of transitions in last block less than " ++ show (last curTSize) ++
+                                        " or same number of transitions and number of places in y less than " ++ show curYSize
+minimizeMethod _ _ = error "minimization method not supported"
+
+checkSizeLimit :: Integer -> SIMap Transition -> [SIMap Place] -> Maybe (Int, (Int, [Int])) -> SBool
+checkSizeLimit _ _ _ Nothing = true
+checkSizeLimit k b ys (Just (1, (curYSize, _))) = (sum (map (\y -> sum (map (\yi -> ite (yi .> 0) (1::SInteger) 0) (vals y))) ys) .< literal (fromIntegral curYSize))
+checkSizeLimit k b ys (Just (2, (_, curTSize))) = (sum (map (\tb -> ite (tb .== (literal k)) (1::SInteger) 0) (vals b))) .< literal (fromIntegral (last curTSize))
+checkSizeLimit k b ys (Just (3, (curYSize, curTSize))) =
+        ((sum (map (\tb -> ite (tb .== (literal k)) (1::SInteger) 0) (vals b))) .< literal (fromIntegral (last curTSize))) ||| (
+            ((sum (map (\tb -> ite (tb .== (literal k)) (1::SInteger) 0) (vals b))) .== literal (fromIntegral (last curTSize))) &&&
+            (sum (map (\y -> sum (map (\yi -> ite (yi .> 0) (1::SInteger) 0) (vals y))) ys) .< literal (fromIntegral curYSize))
+        )
+checkSizeLimit _ _ _ (Just (_, _)) = error "minimization method not supported"
+
+invariantFromAssignment :: PetriNet -> Integer -> IMap Transition -> [IMap Place] -> (TerminalMarkingReachableInvariant, (Int, [Int]))
 invariantFromAssignment net k b ys =
-        [BlockInvariant (i, M.keys (M.filter (== i) b), makeVector y) | (i,y) <- zip [1..] ys]
+        let invariant = [BlockInvariant (i, M.keys (M.filter (== i) b), makeVector y) | (i,y) <- zip [1..] ys]
+        in  (invariant, (sum $ map invariantSize invariant, map (\(BlockInvariant (_, ts, _)) -> length ts) invariant))

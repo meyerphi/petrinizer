@@ -536,7 +536,7 @@ checkTerminalMarkingReachableProperty net = do
 checkTerminalMarkingReachableProperty' :: PetriNet -> [Triplet] -> Integer -> Integer -> OptIO PropResult
 checkTerminalMarkingReachableProperty' net triplets k kmax = do
         verbosePut 1 $ "Checking terminal marking reachable with at most " ++ show k ++ " partitions"
-        r <- checkSat $ checkTerminalMarkingReachableSat net triplets k
+        r <- checkSatMin $ checkTerminalMarkingReachableSat net triplets k
         case r of
             Nothing ->
                 if k < kmax then
