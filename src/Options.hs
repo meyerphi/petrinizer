@@ -32,7 +32,6 @@ data ImplicitProperty = Termination
                       | StructFinalPlace
                       | StructCommunicationFree
                       | TerminalMarkingsUniqueConsensus
-                      | NonConsensusTerminalMarking
                       | TerminalMarkingReachable
                       deriving (Show,Read)
 
@@ -185,12 +184,6 @@ options =
                    optProperties = TerminalMarkingsUniqueConsensus : optProperties opt
                }))
         "Prove that terminal markings have a unique consensus"
-
-        , Option "" ["non-consensus-terminal-marking"]
-        (NoArg (\opt -> Right opt {
-                   optProperties = NonConsensusTerminalMarking : optProperties opt
-               }))
-        "Prove that no non-consensus terminal marking is reachable from an initial marking"
 
         , Option "" ["terminal-marking-reachable"]
         (NoArg (\opt -> Right opt {

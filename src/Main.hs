@@ -39,7 +39,6 @@ import Solver.SComponentWithCut
 import Solver.SComponent
 import Solver.Simplifier
 import Solver.TerminalMarkingsUniqueConsensus
-import Solver.NonConsensusTerminalMarking
 import Solver.TerminalMarkingReachable
 --import Solver.Interpolant
 --import Solver.CommFreeReachability
@@ -220,8 +219,6 @@ makeImplicitProperty _ StructCommunicationFree =
         Property "communication free" $ Structural CommunicationFree
 makeImplicitProperty _ TerminalMarkingsUniqueConsensus =
         Property "reachable terminal markings have a unique consensus" $ Constraint TerminalMarkingsUniqueConsensusConstraint
-makeImplicitProperty _ NonConsensusTerminalMarking =
-        Property "no non-consensus terminal marking reachable" $ Constraint NonConsensusTerminalMarkingConstraint
 makeImplicitProperty _ TerminalMarkingReachable =
         Property "terminal marking reachable" $ Constraint TerminalMarkingReachableConstraint
 
@@ -451,7 +448,6 @@ checkConstraintProperty :: PetriNet -> ConstraintProperty -> OptIO PropResult
 checkConstraintProperty net cp =
         case cp of
             TerminalMarkingsUniqueConsensusConstraint -> checkTerminalMarkingsUniqueConsensusProperty net
-            NonConsensusTerminalMarkingConstraint -> checkNonConsensusTerminalMarkingProperty net
             TerminalMarkingReachableConstraint -> checkTerminalMarkingReachableProperty net
 
 checkTerminalMarkingsUniqueConsensusProperty :: PetriNet -> OptIO PropResult
@@ -490,43 +486,6 @@ refineTerminalMarkingsUniqueConsensusProperty net traps siphons c@(m0, m1, m2, x
                         checkTerminalMarkingsUniqueConsensusProperty' net traps (siphon:siphons)
             Just trap ->
                 checkTerminalMarkingsUniqueConsensusProperty' net (trap:traps) siphons
-
-checkNonConsensusTerminalMarkingProperty :: PetriNet -> OptIO PropResult
-checkNonConsensusTerminalMarkingProperty net = do
-        r <- checkNonConsensusTerminalMarkingProperty' net (fixedTraps net) (fixedSiphons net)
-        case r of
-            (Nothing, _, _) -> return Satisfied
-            (Just _, _, _) -> return Unknown
-
-checkNonConsensusTerminalMarkingProperty' :: PetriNet ->
-        [Trap] -> [Siphon] ->
-        OptIO (Maybe NonConsensusTerminalMarkingCounterExample, [Trap], [Siphon])
-checkNonConsensusTerminalMarkingProperty' net traps siphons = do
-        r <- checkSat $ checkNonConsensusTerminalMarkingSat net traps siphons
-        case r of
-            Nothing -> return (Nothing, traps, siphons)
-            Just c -> do
-                refine <- opt optRefinementType
-                if isJust refine then
-                    refineNonConsensusTerminalMarkingProperty net traps siphons c
-                else
-                    return (Just c, traps, siphons)
-
-refineNonConsensusTerminalMarkingProperty :: PetriNet ->
-        [Trap] -> [Siphon] -> NonConsensusTerminalMarkingCounterExample ->
-        OptIO (Maybe NonConsensusTerminalMarkingCounterExample, [Trap], [Siphon])
-refineNonConsensusTerminalMarkingProperty net traps siphons c@(m0, m, x) = do
-        r1 <- checkSatMin $ Solver.NonConsensusTerminalMarking.checkUnmarkedTrapSat net m0 m x
-        case r1 of
-            Nothing -> do
-                r2 <- checkSatMin $ Solver.NonConsensusTerminalMarking.checkUnmarkedSiphonSat net m0 m x
-                case r2 of
-                    Nothing ->
-                        return (Just c, traps, siphons)
-                    Just siphon ->
-                        checkNonConsensusTerminalMarkingProperty' net traps (siphon:siphons)
-            Just trap ->
-                checkNonConsensusTerminalMarkingProperty' net (trap:traps) siphons
 
 checkTerminalMarkingReachableProperty :: PetriNet -> OptIO PropResult
 checkTerminalMarkingReachableProperty net = do
