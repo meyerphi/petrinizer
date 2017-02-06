@@ -478,7 +478,7 @@ refineTerminalMarkingsUniqueConsensusProperty net traps siphons c@(m0, m1, m2, x
         r1 <- checkSatMin $ Solver.TerminalMarkingsUniqueConsensus.checkUnmarkedTrapSat net m0 m1 m2 x1 x2
         case r1 of
             Nothing -> do
-                r2 <- checkSatMin $ Solver.TerminalMarkingsUniqueConsensus.checkUnmarkedSiphonSat net m0 m1 m2 x1 x2
+                r2 <- checkSatMin $ Solver.TerminalMarkingsUniqueConsensus.checkGeneralizedSiphonConstraintsSat net m0 m1 m2 x1 x2
                 case r2 of
                     Nothing ->
                         return (Just c, traps, siphons)

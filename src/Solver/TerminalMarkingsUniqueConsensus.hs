@@ -4,7 +4,7 @@ module Solver.TerminalMarkingsUniqueConsensus
     (checkTerminalMarkingsUniqueConsensusSat,
      TerminalMarkingsUniqueConsensusCounterExample,
      checkUnmarkedTrapSat,
-     checkUnmarkedSiphonSat)
+     checkGeneralizedSiphonConstraintsSat)
 where
 
 import Data.SBV
@@ -61,8 +61,9 @@ checkTrapConstraints net m0 m1 m2 x1 x2 traps =
 
 checkSiphon :: PetriNet -> SIMap Place -> SIMap Place -> SIMap Place -> SIMap Transition -> SIMap Transition -> Siphon -> SBool
 checkSiphon net m0 m1 m2 x1 x2 siphon =
-            unmarkedByMarking m0 ==> (unmarkedByMarking m1 &&& unmarkedByMarking m2 &&& notPresetOfSequence x1 &&& notPresetOfSequence x2)
-        where unmarkedByMarking m = sum (mval m siphon) .== 0
+            noTransitionEnabledByMarking m0 ==> (notPresetOfSequence x1 &&& notPresetOfSequence x2)
+        where noTransitionEnabledByMarking m = bAnd $ map (notEnabledByMarkingInSiphon m) $ mpost net siphon
+              notEnabledByMarkingInSiphon m t = bOr $ [val m p .< literal w | (p, w) <- lpre net t, p `elem` siphon]
               notPresetOfSequence x = sum (mval x (mpost net siphon)) .== 0
 
 checkSiphonConstraints :: PetriNet -> SIMap Place -> SIMap Place -> SIMap Place -> SIMap Transition -> SIMap Transition -> [Siphon] -> SBool
@@ -104,8 +105,8 @@ markingsFromAssignment m0 m1 m2 x1 x2 =
 
 -- trap and siphon refinement constraints
 
-siphonConstraints :: PetriNet -> SIMap Place -> SBool
-siphonConstraints net b =
+siphonConstraints :: PetriNet -> Marking -> SIMap Place -> SBool
+siphonConstraints net m0 b =
             bAnd $ map siphonConstraint $ transitions net
         where siphonConstraint t =
                   sum (mval b $ post net t) .> 0 ==> sum (mval b $ pre net t) .> 0
@@ -127,6 +128,14 @@ placesPostsetOfSequence net x b = sum (mval b $ mpost net $ elems x) .> 0
 
 placesPresetOfSequence :: PetriNet -> FiringVector -> SIMap Place -> SBool
 placesPresetOfSequence net x b = sum (mval b $ mpre net $ elems x) .> 0
+
+noOutputTransitionEnabled :: PetriNet -> Marking -> SIMap Place -> SBool
+noOutputTransitionEnabled net m b =
+            bAnd $ map outputTransitionNotEnabled $ transitions net
+        where
+            outputTransitionNotEnabled t = outputTransitionOfB t ==> transitionNotEnabledInB t
+            outputTransitionOfB t = sum [val b p | (p, w) <- lpre net t, val m p >= w] .> 0
+            transitionNotEnabledInB t = sum [val b p | (p, w) <- lpre net t, val m p < w] .> 0
 
 nonemptySet :: (Ord a, Show a) => SIMap a -> SBool
 nonemptySet b = sum (vals b) .> 0
@@ -166,24 +175,22 @@ checkUnmarkedTrapSat net m0 m1 m2 x1 x2 =
              \fm -> checkUnmarkedTrap net m0 m1 m2 x1 x2 (fmap fm b) sizeLimit,
              \fm -> placesFromAssignment (fmap fm b)))
 
-checkUnmarkedSiphon :: PetriNet -> Marking -> Marking -> Marking -> FiringVector -> FiringVector -> SIMap Place -> Maybe (Int, Integer) -> SBool
-checkUnmarkedSiphon net m0 m1 m2 x1 x2 b sizeLimit =
-        siphonConstraints net b &&&
+checkGeneralizedSiphonConstraints :: PetriNet -> Marking -> Marking -> Marking -> FiringVector -> FiringVector -> SIMap Place -> Maybe (Int, Integer) -> SBool
+checkGeneralizedSiphonConstraints net m0 m1 m2 x1 x2 b sizeLimit =
+        siphonConstraints net m0 b &&&
         nonemptySet b &&&
         checkSizeLimit b sizeLimit &&&
         checkBinary b &&&
-        (placesUnmarkedByMarking net m0 b &&&
-            (placesMarkedByMarking net m1 b ||| placesMarkedByMarking net m2 b |||
-             placesPresetOfSequence net x1 b ||| placesPresetOfSequence net x2 b)
-        )
+        noOutputTransitionEnabled net m0 b &&&
+        (placesPresetOfSequence net x1 b ||| placesPresetOfSequence net x2 b)
 
-checkUnmarkedSiphonSat :: PetriNet -> Marking -> Marking -> Marking -> FiringVector -> FiringVector -> MinConstraintProblem Integer Siphon Integer
-checkUnmarkedSiphonSat net m0 m1 m2 x1 x2 =
+checkGeneralizedSiphonConstraintsSat :: PetriNet -> Marking -> Marking -> Marking -> FiringVector -> FiringVector -> MinConstraintProblem Integer Siphon Integer
+checkGeneralizedSiphonConstraintsSat net m0 m1 m2 x1 x2 =
         let b = makeVarMap $ places net
         in  (minimizeMethod, \sizeLimit ->
-            ("siphon unmarked in m0 and marked in m1 or m2 or used as input in x1 or x2", "siphon",
+            ("siphon not enabling any output transitions in m0 and used as input in x1 or x2", "siphon",
              getNames b,
-             \fm -> checkUnmarkedSiphon net m0 m1 m2 x1 x2 (fmap fm b) sizeLimit,
+             \fm -> checkGeneralizedSiphonConstraints net m0 m1 m2 x1 x2 (fmap fm b) sizeLimit,
              \fm -> placesFromAssignment (fmap fm b)))
 
 placesFromAssignment :: IMap Place -> ([Place], Integer)
