@@ -4,7 +4,9 @@ module Solver.TerminalMarkingsUniqueConsensus
     (checkTerminalMarkingsUniqueConsensusSat,
      TerminalMarkingsUniqueConsensusCounterExample,
      checkUnmarkedTrapSat,
-     checkGeneralizedSiphonConstraintsSat)
+     checkGeneralizedSiphonConstraintsSat,
+     checkGeneralizedCoTrapSat,
+     StableInequality)
 where
 
 import Data.SBV
@@ -18,6 +20,8 @@ import Solver
 
 type TerminalMarkingsUniqueConsensusCounterExample = (Marking, Marking, Marking, FiringVector, FiringVector)
 
+type StableInequality = (IMap Place, Integer)
+
 stateEquationConstraints :: PetriNet -> SIMap Place -> SIMap Place -> SIMap Transition -> SBool
 stateEquationConstraints net m0 m x =
             bAnd $ map checkStateEquation $ places net
@@ -25,7 +29,7 @@ stateEquationConstraints net m0 m x =
                 let incoming = map addTransition $ lpre net p
                     outgoing = map addTransition $ lpost net p
                 in  val m0 p + sum incoming - sum outgoing .== val m p
-              addTransition (t,w) = literal (fromInteger w) * val x t
+              addTransition (t,w) = literal w * val x t
 
 nonNegativityConstraints :: (Ord a, Show a) => SIMap a -> SBool
 nonNegativityConstraints m =
@@ -49,9 +53,7 @@ differentConsensusConstraints net m1 m2 =
 
 checkTrap :: PetriNet -> SIMap Place -> SIMap Place -> SIMap Place -> SIMap Transition -> SIMap Transition -> Trap -> SBool
 checkTrap net m0 m1 m2 x1 x2 trap =
-            (markedByMarking m0 ==> (markedByMarking m1 &&& markedByMarking m2)) &&&
-            (markedBySequence x1 ==> markedByMarking m1) &&&
-            (markedBySequence x2 ==> markedByMarking m2)
+            (markedByMarking m0 ==> (markedByMarking m1 &&& markedByMarking m2))
         where markedByMarking m = sum (mval m trap) .> 0
               markedBySequence x = sum (mval x (mpre net trap)) .> 0
 
@@ -70,9 +72,18 @@ checkSiphonConstraints :: PetriNet -> SIMap Place -> SIMap Place -> SIMap Place 
 checkSiphonConstraints net m0 m1 m2 x1 x2 siphons =
         bAnd $ map (checkSiphon net m0 m1 m2 x1 x2) siphons
 
+checkInequalityConstraint :: PetriNet -> SIMap Place -> SIMap Place -> SIMap Place -> StableInequality -> SBool
+checkInequalityConstraint net m0 m1 m2 (k, c) =
+            (checkInequality m0) ==> (checkInequality m1 &&& checkInequality m2)
+        where checkInequality m = sum [ literal (val k p) * (val m p) | p <- places net ] .>= literal c
+
+checkInequalityConstraints :: PetriNet -> SIMap Place -> SIMap Place -> SIMap Place -> [StableInequality] -> SBool
+checkInequalityConstraints net m0 m1 m2 inequalities =
+        bAnd [ checkInequalityConstraint net m0 m1 m2 i | i <- inequalities ]
+
 checkTerminalMarkingsUniqueConsensus :: PetriNet -> SIMap Place -> SIMap Place -> SIMap Place -> SIMap Transition -> SIMap Transition ->
-        [Trap] -> [Siphon] -> SBool
-checkTerminalMarkingsUniqueConsensus net m0 m1 m2 x1 x2 traps siphons =
+        [Trap] -> [Siphon] -> [StableInequality] -> SBool
+checkTerminalMarkingsUniqueConsensus net m0 m1 m2 x1 x2 traps siphons inequalities =
         initialMarkingConstraints net m0 &&&
         differentConsensusConstraints net m1 m2 &&&
         stateEquationConstraints net m0 m1 x1 &&&
@@ -85,10 +96,11 @@ checkTerminalMarkingsUniqueConsensus net m0 m1 m2 x1 x2 traps siphons =
         terminalConstraints net m1 &&&
         terminalConstraints net m2 &&&
         checkTrapConstraints net m0 m1 m2 x1 x2 traps &&&
-        checkSiphonConstraints net m0 m1 m2 x1 x2 siphons
+        checkSiphonConstraints net m0 m1 m2 x1 x2 siphons &&&
+        checkInequalityConstraints net m0 m1 m2 inequalities
 
-checkTerminalMarkingsUniqueConsensusSat :: PetriNet -> [Trap] -> [Siphon] -> ConstraintProblem Integer TerminalMarkingsUniqueConsensusCounterExample
-checkTerminalMarkingsUniqueConsensusSat net traps siphons =
+checkTerminalMarkingsUniqueConsensusSat :: PetriNet -> [Trap] -> [Siphon] -> [StableInequality] -> ConstraintProblem Integer TerminalMarkingsUniqueConsensusCounterExample
+checkTerminalMarkingsUniqueConsensusSat net traps siphons inequalities =
         let m0 = makeVarMap $ places net
             m1 = makeVarMapWith prime $ places net
             m2 = makeVarMapWith (prime . prime) $ places net
@@ -96,7 +108,7 @@ checkTerminalMarkingsUniqueConsensusSat net traps siphons =
             x2 = makeVarMapWith prime $ transitions net
         in  ("unique terminal marking", "(m0, m1, m2, x1, x2)",
              getNames m0 ++ getNames m1 ++ getNames m2 ++ getNames x1 ++ getNames x2,
-             \fm -> checkTerminalMarkingsUniqueConsensus net (fmap fm m0) (fmap fm m1) (fmap fm m2) (fmap fm x1) (fmap fm x2) traps siphons,
+             \fm -> checkTerminalMarkingsUniqueConsensus net (fmap fm m0) (fmap fm m1) (fmap fm m2) (fmap fm x1) (fmap fm x2) traps siphons inequalities,
              \fm -> markingsFromAssignment (fmap fm m0) (fmap fm m1) (fmap fm m2) (fmap fm x1) (fmap fm x2))
 
 markingsFromAssignment :: IMap Place -> IMap Place -> IMap Place -> IMap Transition -> IMap Transition -> TerminalMarkingsUniqueConsensusCounterExample
@@ -161,9 +173,7 @@ checkUnmarkedTrap net m0 m1 m2 x1 x2 b sizeLimit =
         checkSizeLimit b sizeLimit &&&
         checkBinary b &&&
         (
-            (placesMarkedByMarking net m0 b &&& (placesUnmarkedByMarking net m1 b ||| placesUnmarkedByMarking net m2 b)) |||
-            (placesPostsetOfSequence net x1 b &&& placesUnmarkedByMarking net m1 b) |||
-            (placesPostsetOfSequence net x2 b &&& placesUnmarkedByMarking net m2 b)
+            (placesMarkedByMarking net m0 b &&& (placesUnmarkedByMarking net m1 b ||| placesUnmarkedByMarking net m2 b))
         )
 
 checkUnmarkedTrapSat :: PetriNet -> Marking -> Marking -> Marking -> FiringVector -> FiringVector -> MinConstraintProblem Integer Trap Integer
@@ -195,3 +205,50 @@ checkGeneralizedSiphonConstraintsSat net m0 m1 m2 x1 x2 =
 
 placesFromAssignment :: IMap Place -> ([Place], Integer)
 placesFromAssignment b = (M.keys (M.filter (> 0) b), sum (M.elems b))
+
+-- stable linear inequalities
+
+checkStableInequalityForMarking :: PetriNet -> Marking -> SIMap Place -> SInteger -> SBool
+checkStableInequalityForMarking net m k c =
+        sum [ (val k p) * literal (val m p) | p <- places net ] .>= c
+
+checkSemiPositiveConstraints :: (Ord a, Show a) => SIMap a -> SBool
+checkSemiPositiveConstraints k =
+            bAnd [ x .>= 0 | x <- vals k ]
+
+checkSemiNegativeConstraints :: (Ord a, Show a) => SIMap a -> SBool
+checkSemiNegativeConstraints k =
+            bAnd [ x .<= 0 | x <- vals k ]
+
+checkGeneralizedTCoTrap :: PetriNet -> SIMap Place -> SInteger -> Transition -> SBool
+checkGeneralizedTCoTrap net k c t =
+            checkTSurInvariant ||| checkTDisabled
+        where checkTSurInvariant = sum output - sum input .>= c
+              checkTDisabled = sum input .< c
+              input = map addPlace $ lpre net t
+              output = map addPlace $ lpost net t
+              addPlace (p, w) = literal w * val k p
+
+checkGeneralizedCoTrap :: PetriNet -> SIMap Place -> SInteger -> SBool
+checkGeneralizedCoTrap net k c =
+        bAnd [ checkGeneralizedTCoTrap net k c t | t <- transitions net ]
+
+checkGeneralizedCoTrapConstraints :: PetriNet -> Marking -> Marking -> Marking -> FiringVector -> FiringVector -> SIMap Place -> SInteger -> SBool
+checkGeneralizedCoTrapConstraints net m0 m1 m2 x1 x2 k c =
+        checkSemiNegativeConstraints k &&&
+        checkGeneralizedCoTrap net k c &&&
+        checkStableInequalityForMarking net m0 k c &&&
+        ((bnot (checkStableInequalityForMarking net m1 k c)) ||| (bnot (checkStableInequalityForMarking net m2 k c)))
+
+checkGeneralizedCoTrapSat :: PetriNet -> Marking -> Marking -> Marking -> FiringVector -> FiringVector -> ConstraintProblem Integer StableInequality
+checkGeneralizedCoTrapSat net m0 m1 m2 x1 x2 =
+        let k = makeVarMap $ places net
+            c = "'c"
+        in  ("generalized co-trap (stable inequality) holding m but not in m1 or m2", "stable inequality",
+             c : getNames k,
+             \fm -> checkGeneralizedCoTrapConstraints net m0 m1 m2 x1 x2 (fmap fm k) (fm c),
+             \fm -> stableInequalityFromAssignment (fmap fm k) (fm c))
+
+stableInequalityFromAssignment :: IMap Place -> Integer -> StableInequality
+stableInequalityFromAssignment k c = (k, c)
+
