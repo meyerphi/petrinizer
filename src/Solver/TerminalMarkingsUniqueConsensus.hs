@@ -84,10 +84,9 @@ checkInequalityConstraints net m0 m1 m2 inequalities =
 checkTerminalMarkingsUniqueConsensus :: PetriNet -> SIMap Place -> SIMap Place -> SIMap Place -> SIMap Transition -> SIMap Transition ->
         [Trap] -> [Siphon] -> [StableInequality] -> SBool
 checkTerminalMarkingsUniqueConsensus net m0 m1 m2 x1 x2 traps siphons inequalities =
-        initialMarkingConstraints net m0 &&&
-        differentConsensusConstraints net m1 m2 &&&
         stateEquationConstraints net m0 m1 x1 &&&
         stateEquationConstraints net m0 m2 x2 &&&
+        initialMarkingConstraints net m0 &&&
         nonNegativityConstraints m0 &&&
         nonNegativityConstraints m1 &&&
         nonNegativityConstraints m2 &&&
@@ -95,8 +94,10 @@ checkTerminalMarkingsUniqueConsensus net m0 m1 m2 x1 x2 traps siphons inequaliti
         nonNegativityConstraints x2 &&&
         terminalConstraints net m1 &&&
         terminalConstraints net m2 &&&
+        differentConsensusConstraints net m1 m2 &&&
         checkTrapConstraints net m0 m1 m2 x1 x2 traps &&&
         checkSiphonConstraints net m0 m1 m2 x1 x2 siphons &&&
+        checkSubnetSiphonConstraints net m0 m1 m2 x1 x2 siphons &&&
         checkInequalityConstraints net m0 m1 m2 inequalities
 
 checkTerminalMarkingsUniqueConsensusSat :: PetriNet -> [Trap] -> [Siphon] -> [StableInequality] -> ConstraintProblem Integer TerminalMarkingsUniqueConsensusCounterExample
