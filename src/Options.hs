@@ -48,6 +48,7 @@ data Options = Options { inputFormat :: InputFormat
                        , optRefinementType :: Maybe RefinementType
                        , optMinimizeRefinement :: Int
                        , optAuto :: Bool
+                       , optSMTAuto :: Bool
                        , optInvariant :: Bool
                        , optBoolConst :: Bool
                        , optOutput :: Maybe String
@@ -67,6 +68,7 @@ startOptions = Options { inputFormat = PNET
                        , optRefinementType = Just SComponentWithCutRefinement
                        , optMinimizeRefinement = 0
                        , optAuto = False
+                       , optSMTAuto = True
                        , optInvariant = False
                        , optBoolConst = False
                        , optOutput = Nothing
@@ -272,6 +274,10 @@ options =
         , Option "" ["auto"]
         (NoArg (\opt -> Right opt { optAuto = True }))
         "Automatically find best refinement, minimization and simplification method"
+
+        , Option "" ["smt-disable-auto-config"]
+        (NoArg (\opt -> Right opt { optSMTAuto = False }))
+        "Disable automatic configuration of the SMT solver"
 
         , Option "v" ["verbose"]
         (NoArg (\opt -> Right opt { optVerbosity = optVerbosity opt + 1 }))

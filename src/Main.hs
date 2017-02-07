@@ -478,17 +478,17 @@ refineTerminalMarkingsUniqueConsensusProperty net traps siphons inequalities c@(
         r1 <- checkSatMin $ Solver.TerminalMarkingsUniqueConsensus.checkUnmarkedTrapSat net m0 m1 m2 x1 x2
         case r1 of
             Nothing -> do
-                return (Just c, traps, siphons, inequalities)
---                r2 <- checkSatMin $ Solver.TerminalMarkingsUniqueConsensus.checkGeneralizedSiphonConstraintsSat net m0 m1 m2 x1 x2
---                case r2 of
---                    Nothing -> do
+                r2 <- checkSatMin $ Solver.TerminalMarkingsUniqueConsensus.checkGeneralizedSiphonConstraintsSat net m0 m1 m2 x1 x2
+                case r2 of
+                    Nothing -> do
+                        return (Just c, traps, siphons, inequalities)
 --                        r3 <- checkSat $ Solver.TerminalMarkingsUniqueConsensus.checkGeneralizedCoTrapSat net m0 m1 m2 x1 x2
 --                        case r3 of
 --                            Nothing -> return (Just c, traps, siphons, inequalities)
 --                            Just inequality ->
 --                                checkTerminalMarkingsUniqueConsensusProperty' net traps siphons (inequality:inequalities)
---                    Just siphon ->
---                        checkTerminalMarkingsUniqueConsensusProperty' net traps (siphon:siphons) inequalities
+                    Just siphon ->
+                        checkTerminalMarkingsUniqueConsensusProperty' net traps (siphon:siphons) inequalities
             Just trap ->
                 checkTerminalMarkingsUniqueConsensusProperty' net (trap:traps) siphons inequalities
 

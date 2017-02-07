@@ -30,12 +30,18 @@ symConstraints vars constraint = do
         syms <- mapM exists vars
         return $ constraint $ val $ M.fromList $ vars `zip` syms
 
+getSolverConfig :: Bool -> Bool -> SMTConfig
+getSolverConfig verbose auto =
+        let tweaks = if auto then [] else ["(set-option :auto_config false)"]
+        in  z3{ verbose=verbose, solverTweaks=tweaks }
+
 checkSat :: (SatModel a, SymWord a, Show a, Show b) =>
         ConstraintProblem a b -> OptIO (Maybe b)
 checkSat (problemName, resultName, vars, constraint, interpretation) = do
         verbosePut 2 $ "Checking SAT of " ++ problemName
         verbosity <- opt optVerbosity
-        result <- liftIO (satWith z3{verbose=verbosity >= 4}
+        autoConf <- opt optSMTAuto
+        result <- liftIO (satWith (getSolverConfig (verbosity >= 4) autoConf)
                     (symConstraints vars constraint))
         case rebuildModel vars (getModel result) of
             Nothing -> do
