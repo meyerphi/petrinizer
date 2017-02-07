@@ -475,10 +475,10 @@ refineTerminalMarkingsUniqueConsensusProperty :: PetriNet ->
         [Trap] -> [Siphon] -> [StableInequality] -> TerminalMarkingsUniqueConsensusCounterExample ->
         OptIO (Maybe TerminalMarkingsUniqueConsensusCounterExample, [Trap], [Siphon], [StableInequality])
 refineTerminalMarkingsUniqueConsensusProperty net traps siphons inequalities c@(m0, m1, m2, x1, x2) = do
-        r1 <- checkSatMin $ Solver.TerminalMarkingsUniqueConsensus.checkUnmarkedTrapSat net m0 m1 m2 x1 x2
+        r1 <- checkSatMin $ Solver.TerminalMarkingsUniqueConsensus.findUnmarkedTrapSat net m0 m1 m2 x1 x2
         case r1 of
             Nothing -> do
-                r2 <- checkSatMin $ Solver.TerminalMarkingsUniqueConsensus.checkGeneralizedSiphonConstraintsSat net m0 m1 m2 x1 x2
+                r2 <- checkSatMin $ Solver.TerminalMarkingsUniqueConsensus.findGeneralizedSiphonConstraintsSat net m0 m1 m2 x1 x2
                 case r2 of
                     Nothing -> do
                         return (Just c, traps, siphons, inequalities)

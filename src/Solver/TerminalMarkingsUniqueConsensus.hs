@@ -3,8 +3,8 @@
 module Solver.TerminalMarkingsUniqueConsensus
     (checkTerminalMarkingsUniqueConsensusSat,
      TerminalMarkingsUniqueConsensusCounterExample,
-     checkUnmarkedTrapSat,
-     checkGeneralizedSiphonConstraintsSat,
+     findUnmarkedTrapSat,
+     findGeneralizedSiphonConstraintsSat,
      checkGeneralizedCoTrapSat,
      StableInequality)
 where
@@ -48,8 +48,7 @@ initialMarkingConstraints net m0 =
 
 differentConsensusConstraints :: PetriNet -> SIMap Place -> SIMap Place -> SBool
 differentConsensusConstraints net m1 m2 =
-        (sum (mval m1 (yesStates net)) .> 0 &&& sum (mval m2 (noStates net)) .> 0) |||
-        (sum (mval m1 (noStates net)) .> 0 &&& sum (mval m2 (yesStates net)) .> 0)
+        (sum (mval m1 (yesStates net)) .> 0 &&& sum (mval m2 (noStates net)) .> 0)
 
 checkTrap :: PetriNet -> SIMap Place -> SIMap Place -> SIMap Place -> SIMap Transition -> SIMap Transition -> Trap -> SBool
 checkTrap net m0 m1 m2 x1 x2 trap =
@@ -61,16 +60,16 @@ checkTrapConstraints :: PetriNet -> SIMap Place -> SIMap Place -> SIMap Place ->
 checkTrapConstraints net m0 m1 m2 x1 x2 traps =
         bAnd $ map (checkTrap net m0 m1 m2 x1 x2) traps
 
-checkSiphon :: PetriNet -> SIMap Place -> SIMap Place -> SIMap Place -> SIMap Transition -> SIMap Transition -> Siphon -> SBool
-checkSiphon net m0 m1 m2 x1 x2 siphon =
-            noTransitionEnabledByMarking m0 ==> (notPresetOfSequence x1 &&& notPresetOfSequence x2)
-        where noTransitionEnabledByMarking m = bAnd $ map (notEnabledByMarkingInSiphon m) $ mpost net siphon
-              notEnabledByMarkingInSiphon m t = bOr $ [val m p .< literal w | (p, w) <- lpre net t, p `elem` siphon]
-              notPresetOfSequence x = sum (mval x (mpost net siphon)) .== 0
+checkGeneralizedSiphon :: PetriNet -> SIMap Place -> SIMap Place -> SIMap Place -> SIMap Transition -> SIMap Transition -> Siphon -> SBool
+checkGeneralizedSiphon net m0 m1 m2 x1 x2 siphon =
+            ((unmarkedByMarking m0 &&& unmarkedBySequence x1) ==> (unmarkedByMarking m1)) &&&
+            ((unmarkedByMarking m0 &&& unmarkedBySequence x2) ==> (unmarkedByMarking m2))
+        where unmarkedByMarking m = sum (mval m siphon) .== 0
+              unmarkedBySequence x = sum [ val x t | t <- (mpre net siphon \\ mpost net siphon) ] .== 0
 
-checkSiphonConstraints :: PetriNet -> SIMap Place -> SIMap Place -> SIMap Place -> SIMap Transition -> SIMap Transition -> [Siphon] -> SBool
-checkSiphonConstraints net m0 m1 m2 x1 x2 siphons =
-        bAnd $ map (checkSiphon net m0 m1 m2 x1 x2) siphons
+checkGeneralizedSiphonConstraints :: PetriNet -> SIMap Place -> SIMap Place -> SIMap Place -> SIMap Transition -> SIMap Transition -> [Siphon] -> SBool
+checkGeneralizedSiphonConstraints net m0 m1 m2 x1 x2 siphons =
+        bAnd $ map (checkGeneralizedSiphon net m0 m1 m2 x1 x2) siphons
 
 checkInequalityConstraint :: PetriNet -> SIMap Place -> SIMap Place -> SIMap Place -> StableInequality -> SBool
 checkInequalityConstraint net m0 m1 m2 (k, c) =
@@ -96,8 +95,7 @@ checkTerminalMarkingsUniqueConsensus net m0 m1 m2 x1 x2 traps siphons inequaliti
         terminalConstraints net m2 &&&
         differentConsensusConstraints net m1 m2 &&&
         checkTrapConstraints net m0 m1 m2 x1 x2 traps &&&
-        checkSiphonConstraints net m0 m1 m2 x1 x2 siphons &&&
-        checkSubnetSiphonConstraints net m0 m1 m2 x1 x2 siphons &&&
+        checkGeneralizedSiphonConstraints net m0 m1 m2 x1 x2 siphons &&&
         checkInequalityConstraints net m0 m1 m2 inequalities
 
 checkTerminalMarkingsUniqueConsensusSat :: PetriNet -> [Trap] -> [Siphon] -> [StableInequality] -> ConstraintProblem Integer TerminalMarkingsUniqueConsensusCounterExample
@@ -118,11 +116,11 @@ markingsFromAssignment m0 m1 m2 x1 x2 =
 
 -- trap and siphon refinement constraints
 
-siphonConstraints :: PetriNet -> Marking -> SIMap Place -> SBool
-siphonConstraints net m0 b =
-            bAnd $ map siphonConstraint $ transitions net
+generalizedSiphonConstraints :: PetriNet -> FiringVector -> SIMap Place -> SBool
+generalizedSiphonConstraints net x b =
+            bAnd [ siphonConstraint t | t <- elems x ]
         where siphonConstraint t =
-                  sum (mval b $ post net t) .> 0 ==> sum (mval b $ pre net t) .> 0
+                sum (mval b $ post net t) .> 0 ==> sum (mval b $ pre net t) .> 0
 
 trapConstraints :: PetriNet -> SIMap Place -> SBool
 trapConstraints net b =
@@ -167,41 +165,40 @@ minimizeMethod 1 curSize = "size smaller than " ++ show curSize
 minimizeMethod 2 curSize = "size larger than " ++ show curSize
 minimizeMethod _ _ = error "minimization method not supported"
 
-checkUnmarkedTrap :: PetriNet -> Marking -> Marking -> Marking -> FiringVector -> FiringVector -> SIMap Place -> Maybe (Int, Integer) -> SBool
-checkUnmarkedTrap net m0 m1 m2 x1 x2 b sizeLimit =
-        trapConstraints net b &&&
-        nonemptySet b &&&
+findUnmarkedTrap :: PetriNet -> Marking -> Marking -> Marking -> FiringVector -> FiringVector -> SIMap Place -> Maybe (Int, Integer) -> SBool
+findUnmarkedTrap net m0 m1 m2 x1 x2 b sizeLimit =
+        placesMarkedByMarking net m0 b &&&
         checkSizeLimit b sizeLimit &&&
         checkBinary b &&&
-        (
-            (placesMarkedByMarking net m0 b &&& (placesUnmarkedByMarking net m1 b ||| placesUnmarkedByMarking net m2 b))
-        )
+        trapConstraints net b &&&
+        ((placesUnmarkedByMarking net m1 b ||| placesUnmarkedByMarking net m2 b))
 
-checkUnmarkedTrapSat :: PetriNet -> Marking -> Marking -> Marking -> FiringVector -> FiringVector -> MinConstraintProblem Integer Trap Integer
-checkUnmarkedTrapSat net m0 m1 m2 x1 x2 =
+findUnmarkedTrapSat :: PetriNet -> Marking -> Marking -> Marking -> FiringVector -> FiringVector -> MinConstraintProblem Integer Trap Integer
+findUnmarkedTrapSat net m0 m1 m2 x1 x2 =
         let b = makeVarMap $ places net
         in  (minimizeMethod, \sizeLimit ->
             ("trap marked in m and unmarked in m1 or m2, or marked by x1 and unmarked in m1, or marked by x2 and unmarked in m2", "trap",
              getNames b,
-             \fm -> checkUnmarkedTrap net m0 m1 m2 x1 x2 (fmap fm b) sizeLimit,
+             \fm -> findUnmarkedTrap net m0 m1 m2 x1 x2 (fmap fm b) sizeLimit,
              \fm -> placesFromAssignment (fmap fm b)))
 
-checkGeneralizedSiphonConstraints :: PetriNet -> Marking -> Marking -> Marking -> FiringVector -> FiringVector -> SIMap Place -> Maybe (Int, Integer) -> SBool
-checkGeneralizedSiphonConstraints net m0 m1 m2 x1 x2 b sizeLimit =
-        siphonConstraints net m0 b &&&
-        nonemptySet b &&&
+findGeneralizedSiphonConstraints :: PetriNet -> Marking -> Marking -> Marking -> FiringVector -> FiringVector -> SIMap Place -> Maybe (Int, Integer) -> SBool
+findGeneralizedSiphonConstraints net m0 m1 m2 x1 x2 b sizeLimit =
+        placesUnmarkedByMarking net m0 b &&&
         checkSizeLimit b sizeLimit &&&
         checkBinary b &&&
-        noOutputTransitionEnabled net m0 b &&&
-        (placesPresetOfSequence net x1 b ||| placesPresetOfSequence net x2 b)
+        (
+            (generalizedSiphonConstraints net x1 b &&& placesMarkedByMarking net m1 b) |||
+            (generalizedSiphonConstraints net x2 b &&& placesMarkedByMarking net m2 b)
+        )
 
-checkGeneralizedSiphonConstraintsSat :: PetriNet -> Marking -> Marking -> Marking -> FiringVector -> FiringVector -> MinConstraintProblem Integer Siphon Integer
-checkGeneralizedSiphonConstraintsSat net m0 m1 m2 x1 x2 =
+findGeneralizedSiphonConstraintsSat :: PetriNet -> Marking -> Marking -> Marking -> FiringVector -> FiringVector -> MinConstraintProblem Integer Siphon Integer
+findGeneralizedSiphonConstraintsSat net m0 m1 m2 x1 x2 =
         let b = makeVarMap $ places net
         in  (minimizeMethod, \sizeLimit ->
-            ("siphon not enabling any output transitions in m0 and used as input in x1 or x2", "siphon",
+            ("siphon (w.r.t. x1 or x2) not marked in m0 and marked in m1 or m2", "siphon",
              getNames b,
-             \fm -> checkGeneralizedSiphonConstraints net m0 m1 m2 x1 x2 (fmap fm b) sizeLimit,
+             \fm -> findGeneralizedSiphonConstraints net m0 m1 m2 x1 x2 (fmap fm b) sizeLimit,
              \fm -> placesFromAssignment (fmap fm b)))
 
 placesFromAssignment :: IMap Place -> ([Place], Integer)
