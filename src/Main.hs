@@ -452,45 +452,44 @@ checkConstraintProperty net cp =
 
 checkTerminalMarkingsUniqueConsensusProperty :: PetriNet -> OptIO PropResult
 checkTerminalMarkingsUniqueConsensusProperty net = do
-        r <- checkTerminalMarkingsUniqueConsensusProperty' net (fixedTraps net) (fixedSiphons net) []
+        r <- checkTerminalMarkingsUniqueConsensusProperty' net (fixedTraps net) [] (fixedSiphons net) []
         case r of
-            (Nothing, _, _, _) -> return Satisfied
-            (Just _, _, _, _) -> return Unknown
+            (Nothing, _, _, _, _) -> return Satisfied
+            (Just _, _, _, _, _) -> return Unknown
 
 checkTerminalMarkingsUniqueConsensusProperty' :: PetriNet ->
-        [Trap] -> [Siphon] -> [StableInequality] ->
-        OptIO (Maybe TerminalMarkingsUniqueConsensusCounterExample, [Trap], [Siphon], [StableInequality])
-checkTerminalMarkingsUniqueConsensusProperty' net traps siphons inequalities = do
-        r <- checkSat $ checkTerminalMarkingsUniqueConsensusSat net traps siphons inequalities
+        [Trap] -> [Trap] -> [Siphon] -> [StableInequality] ->
+        OptIO (Maybe TerminalMarkingsUniqueConsensusCounterExample, [Trap], [Trap], [Siphon], [StableInequality])
+checkTerminalMarkingsUniqueConsensusProperty' net traps utraps usiphons inequalities = do
+        r <- checkSat $ checkTerminalMarkingsUniqueConsensusSat net traps utraps usiphons inequalities
         case r of
-            Nothing -> return (Nothing, traps, siphons, inequalities)
+            Nothing -> return (Nothing, traps, utraps, usiphons, inequalities)
             Just c -> do
                 refine <- opt optRefinementType
                 if isJust refine then
-                    refineTerminalMarkingsUniqueConsensusProperty net traps siphons inequalities c
+                    refineTerminalMarkingsUniqueConsensusProperty net traps utraps usiphons inequalities c
                 else
-                    return (Just c, traps, siphons, inequalities)
+                    return (Just c, traps, utraps, usiphons, inequalities)
 
 refineTerminalMarkingsUniqueConsensusProperty :: PetriNet ->
-        [Trap] -> [Siphon] -> [StableInequality] -> TerminalMarkingsUniqueConsensusCounterExample ->
-        OptIO (Maybe TerminalMarkingsUniqueConsensusCounterExample, [Trap], [Siphon], [StableInequality])
-refineTerminalMarkingsUniqueConsensusProperty net traps siphons inequalities c@(m0, m1, m2, x1, x2) = do
-        r1 <- checkSatMin $ Solver.TerminalMarkingsUniqueConsensus.findUnmarkedTrapSat net m0 m1 m2 x1 x2
+        [Trap] -> [Trap] -> [Siphon] -> [StableInequality] -> TerminalMarkingsUniqueConsensusCounterExample ->
+        OptIO (Maybe TerminalMarkingsUniqueConsensusCounterExample, [Trap], [Trap], [Siphon], [StableInequality])
+refineTerminalMarkingsUniqueConsensusProperty net traps utraps usiphons inequalities c@(m0, m1, m2, x1, x2) = do
+        r1 <- checkSatMin $ Solver.TerminalMarkingsUniqueConsensus.findTrapConstraintsSat net m0 m1 m2
         case r1 of
             Nothing -> do
-                r2 <- checkSatMin $ Solver.TerminalMarkingsUniqueConsensus.findGeneralizedSiphonConstraintsSat net m0 m1 m2 x1 x2
+                r2 <- checkSatMin $ Solver.TerminalMarkingsUniqueConsensus.findUSiphonConstraintsSat net m0 m1 m2 x1 x2
                 case r2 of
                     Nothing -> do
-                        return (Just c, traps, siphons, inequalities)
---                        r3 <- checkSat $ Solver.TerminalMarkingsUniqueConsensus.checkGeneralizedCoTrapSat net m0 m1 m2 x1 x2
---                        case r3 of
---                            Nothing -> return (Just c, traps, siphons, inequalities)
---                            Just inequality ->
---                                checkTerminalMarkingsUniqueConsensusProperty' net traps siphons (inequality:inequalities)
-                    Just siphon ->
-                        checkTerminalMarkingsUniqueConsensusProperty' net traps (siphon:siphons) inequalities
+                        r3 <- checkSatMin $ Solver.TerminalMarkingsUniqueConsensus.findUTrapConstraintsSat net m0 m1 m2 x1 x2
+                        case r3 of
+                            Nothing -> return (Just c, traps, utraps, usiphons, inequalities)
+                            Just utrap ->
+                                checkTerminalMarkingsUniqueConsensusProperty' net traps (utrap:utraps) usiphons inequalities
+                    Just usiphon ->
+                        checkTerminalMarkingsUniqueConsensusProperty' net traps utraps (usiphon:usiphons) inequalities
             Just trap ->
-                checkTerminalMarkingsUniqueConsensusProperty' net (trap:traps) siphons inequalities
+                checkTerminalMarkingsUniqueConsensusProperty' net (trap:traps) utraps usiphons inequalities
 
 checkTerminalMarkingReachableProperty :: PetriNet -> OptIO PropResult
 checkTerminalMarkingReachableProperty net = do
