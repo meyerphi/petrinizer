@@ -75,11 +75,14 @@ checkTrapConstraints net m0 m1 m2 traps =
 
 checkUTrap :: PetriNet -> SIMap Place -> SIMap Place -> SIMap Place -> SIMap Transition -> SIMap Transition -> Trap -> SBool
 checkUTrap net m0 m1 m2 x1 x2 utrap =
-            ((unmarkedByMarking utrap m0) ||| (
-                ((sequenceIn u x1) ||| (markedByMarking utrap m1)) &&&
-                ((sequenceIn u x2) ||| (markedByMarking utrap m2))
-            ))
-        where u = (mpost net utrap \\ mpre net utrap)
+            (
+                ((sequenceNotIn upre x1) ||| (sequenceIn uunmark x1) ||| (markedByMarking utrap m1))
+            &&&
+                ((sequenceNotIn upre x2) ||| (sequenceIn uunmark x2) ||| (markedByMarking utrap m2))
+            )
+        where upost = mpost net utrap
+              upre = mpre net utrap
+              uunmark = upost \\ upre
 
 checkUTrapConstraints :: PetriNet -> SIMap Place -> SIMap Place -> SIMap Place -> SIMap Transition -> SIMap Transition -> [Trap] -> SBool
 checkUTrapConstraints net m0 m1 m2 x1 x2 traps =
@@ -87,11 +90,18 @@ checkUTrapConstraints net m0 m1 m2 x1 x2 traps =
 
 checkUSiphon :: PetriNet -> SIMap Place -> SIMap Place -> SIMap Place -> SIMap Transition -> SIMap Transition -> Siphon -> SBool
 checkUSiphon net m0 m1 m2 x1 x2 usiphon =
-            ((markedByMarking usiphon m0) ||| (
-                ((sequenceIn u x1) ||| (unmarkedByMarking usiphon m1)) &&&
-                ((sequenceIn u x2) ||| (unmarkedByMarking usiphon m2))
-            ))
-        where u = (mpre net usiphon \\ mpost net usiphon)
+            (
+                markedByMarking usiphon m0
+            |||
+                (
+                    ((sequenceNotIn upost x1) ||| (sequenceIn umark x1))
+                &&&
+                    ((sequenceNotIn upost x2) ||| (sequenceIn umark x2))
+                )
+            )
+        where upost = mpost net usiphon
+              upre = mpre net usiphon
+              umark = upre \\ upost
 
 checkUSiphonConstraints :: PetriNet -> SIMap Place -> SIMap Place -> SIMap Place -> SIMap Transition -> SIMap Transition -> [Siphon] -> SBool
 checkUSiphonConstraints net m0 m1 m2 x1 x2 siphons =
@@ -219,38 +229,37 @@ findTrapConstraintsSat net m0 m1 m2 =
 
 findUTrapConstraints :: PetriNet -> Marking -> Marking -> Marking -> FiringVector -> FiringVector -> SIMap Place -> Maybe (Int, Integer) -> SBool
 findUTrapConstraints net m0 m1 m2 x1 x2 b sizeLimit =
-        placesMarkedByMarking net m0 b &&&
         checkSizeLimit b sizeLimit &&&
         checkBinary b &&&
         (
-            (uTrapConstraints net x1 b &&& placesUnmarkedByMarking net m1 b) |||
-            (uTrapConstraints net x2 b &&& placesUnmarkedByMarking net m2 b)
+            (placesPostsetOfSequence net x1 b &&& uTrapConstraints net x1 b &&& placesUnmarkedByMarking net m1 b) |||
+            (placesPostsetOfSequence net x2 b &&& uTrapConstraints net x2 b &&& placesUnmarkedByMarking net m2 b)
         )
 
 findUTrapConstraintsSat :: PetriNet -> Marking -> Marking -> Marking -> FiringVector -> FiringVector -> MinConstraintProblem Integer Trap Integer
 findUTrapConstraintsSat net m0 m1 m2 x1 x2 =
         let b = makeVarMap $ places net
         in  (minimizeMethod, \sizeLimit ->
-            ("u-trap (w.r.t. x1 or x2) marked in m0 and not marked in m1 or m2", "u-trap",
+            ("u-trap (w.r.t. x1 or x2) marked by x1 or x2 and not marked in m1 or m2", "u-trap",
              getNames b,
              \fm -> findUTrapConstraints net m0 m1 m2 x1 x2 (fmap fm b) sizeLimit,
              \fm -> placesFromAssignment (fmap fm b)))
 
 findUSiphonConstraints :: PetriNet -> Marking -> Marking -> Marking -> FiringVector -> FiringVector -> SIMap Place -> Maybe (Int, Integer) -> SBool
 findUSiphonConstraints net m0 m1 m2 x1 x2 b sizeLimit =
-        placesUnmarkedByMarking net m0 b &&&
         checkSizeLimit b sizeLimit &&&
         checkBinary b &&&
+        placesUnmarkedByMarking net m0 b &&&
         (
-            (uSiphonConstraints net x1 b &&& placesMarkedByMarking net m1 b) |||
-            (uSiphonConstraints net x2 b &&& placesMarkedByMarking net m2 b)
+            (placesPresetOfSequence net x1 b &&& uSiphonConstraints net x1 b) |||
+            (placesPresetOfSequence net x2 b &&& uSiphonConstraints net x2 b)
         )
 
 findUSiphonConstraintsSat :: PetriNet -> Marking -> Marking -> Marking -> FiringVector -> FiringVector -> MinConstraintProblem Integer Siphon Integer
 findUSiphonConstraintsSat net m0 m1 m2 x1 x2 =
         let b = makeVarMap $ places net
         in  (minimizeMethod, \sizeLimit ->
-            ("u-siphon (w.r.t. x1 or x2) not marked in m0 and marked in m1 or m2", "u-siphon",
+            ("u-siphon (w.r.t. x1 or x2) used by x1 or x2 and unmarked in m0", "u-siphon",
              getNames b,
              \fm -> findUSiphonConstraints net m0 m1 m2 x1 x2 (fmap fm b) sizeLimit,
              \fm -> placesFromAssignment (fmap fm b)))
