@@ -63,16 +63,6 @@ sequenceNotIn u x = sum (mval x u) .== 0
 sequenceIn :: [Transition] -> SIMap Transition -> SBool
 sequenceIn u x = sum (mval x u) .> 0
 
-checkTrap :: PetriNet -> SIMap Place -> SIMap Place -> SIMap Place -> Trap -> SBool
-checkTrap net m0 m1 m2 trap =
-            (markedByMarking m0 ==> (markedByMarking m1 &&& markedByMarking m2))
-        where markedByMarking m = sum (mval m trap) .> 0
-              markedBySequence x = sum (mval x (mpre net trap)) .> 0
-
-checkTrapConstraints :: PetriNet -> SIMap Place -> SIMap Place -> SIMap Place -> [Trap] -> SBool
-checkTrapConstraints net m0 m1 m2 traps =
-        bAnd $ map (checkTrap net m0 m1 m2) traps
-
 checkUTrap :: PetriNet -> SIMap Place -> SIMap Place -> SIMap Place -> SIMap Transition -> SIMap Transition -> Trap -> SBool
 checkUTrap net m0 m1 m2 x1 x2 utrap =
             (
@@ -117,8 +107,8 @@ checkInequalityConstraints net m0 m1 m2 inequalities =
         bAnd [ checkInequalityConstraint net m0 m1 m2 i | i <- inequalities ]
 
 checkTerminalMarkingsUniqueConsensus :: PetriNet -> SIMap Place -> SIMap Place -> SIMap Place -> SIMap Transition -> SIMap Transition ->
-        [Trap] -> [Trap] -> [Siphon] -> [StableInequality] -> SBool
-checkTerminalMarkingsUniqueConsensus net m0 m1 m2 x1 x2 traps utraps usiphons inequalities =
+        [Trap] -> [Siphon] -> [StableInequality] -> SBool
+checkTerminalMarkingsUniqueConsensus net m0 m1 m2 x1 x2 utraps usiphons inequalities =
         stateEquationConstraints net m0 m1 x1 &&&
         stateEquationConstraints net m0 m2 x2 &&&
         initialMarkingConstraints net m0 &&&
@@ -130,13 +120,12 @@ checkTerminalMarkingsUniqueConsensus net m0 m1 m2 x1 x2 traps utraps usiphons in
         terminalConstraints net m1 &&&
         terminalConstraints net m2 &&&
         differentConsensusConstraints net m1 m2 &&&
-        checkTrapConstraints net m0 m1 m2 traps &&&
         checkUTrapConstraints net m0 m1 m2 x1 x2 utraps &&&
         checkUSiphonConstraints net m0 m1 m2 x1 x2 usiphons &&&
         checkInequalityConstraints net m0 m1 m2 inequalities
 
-checkTerminalMarkingsUniqueConsensusSat :: PetriNet -> [Trap] -> [Trap] -> [Siphon] -> [StableInequality] -> ConstraintProblem Integer TerminalMarkingsUniqueConsensusCounterExample
-checkTerminalMarkingsUniqueConsensusSat net traps utraps usiphons inequalities =
+checkTerminalMarkingsUniqueConsensusSat :: PetriNet -> [Trap] -> [Siphon] -> [StableInequality] -> ConstraintProblem Integer TerminalMarkingsUniqueConsensusCounterExample
+checkTerminalMarkingsUniqueConsensusSat net utraps usiphons inequalities =
         let m0 = makeVarMap $ places net
             m1 = makeVarMapWith prime $ places net
             m2 = makeVarMapWith (prime . prime) $ places net
@@ -144,7 +133,7 @@ checkTerminalMarkingsUniqueConsensusSat net traps utraps usiphons inequalities =
             x2 = makeVarMapWith prime $ transitions net
         in  ("unique terminal marking", "(m0, m1, m2, x1, x2)",
              getNames m0 ++ getNames m1 ++ getNames m2 ++ getNames x1 ++ getNames x2,
-             \fm -> checkTerminalMarkingsUniqueConsensus net (fmap fm m0) (fmap fm m1) (fmap fm m2) (fmap fm x1) (fmap fm x2) traps utraps usiphons inequalities,
+             \fm -> checkTerminalMarkingsUniqueConsensus net (fmap fm m0) (fmap fm m1) (fmap fm m2) (fmap fm x1) (fmap fm x2) utraps usiphons inequalities,
              \fm -> markingsFromAssignment (fmap fm m0) (fmap fm m1) (fmap fm m2) (fmap fm x1) (fmap fm x2))
 
 markingsFromAssignment :: IMap Place -> IMap Place -> IMap Place -> IMap Transition -> IMap Transition -> TerminalMarkingsUniqueConsensusCounterExample
@@ -210,21 +199,23 @@ minimizeMethod 1 curSize = "size smaller than " ++ show curSize
 minimizeMethod 2 curSize = "size larger than " ++ show curSize
 minimizeMethod _ _ = error "minimization method not supported"
 
-findTrap :: PetriNet -> Marking -> Marking -> Marking -> SIMap Place -> Maybe (Int, Integer) -> SBool
-findTrap net m0 m1 m2 b sizeLimit =
-        placesMarkedByMarking net m0 b &&&
+findTrap :: PetriNet -> Marking -> Marking -> Marking -> FiringVector -> FiringVector -> SIMap Place -> Maybe (Int, Integer) -> SBool
+findTrap net m0 m1 m2 x1 x2 b sizeLimit =
         checkSizeLimit b sizeLimit &&&
         checkBinary b &&&
         trapConstraints net b &&&
-        ((placesUnmarkedByMarking net m1 b ||| placesUnmarkedByMarking net m2 b))
+        (
+            (placesPostsetOfSequence net x1 b &&& placesUnmarkedByMarking net m1 b) |||
+            (placesPostsetOfSequence net x2 b &&& placesUnmarkedByMarking net m2 b)
+        )
 
-findTrapConstraintsSat :: PetriNet -> Marking -> Marking -> Marking -> MinConstraintProblem Integer Trap Integer
-findTrapConstraintsSat net m0 m1 m2 =
+findTrapConstraintsSat :: PetriNet -> Marking -> Marking -> Marking -> FiringVector -> FiringVector -> MinConstraintProblem Integer Trap Integer
+findTrapConstraintsSat net m0 m1 m2 x1 x2 =
         let b = makeVarMap $ places net
         in  (minimizeMethod, \sizeLimit ->
-            ("trap marked in m0 and unmarked in m1 or m2", "trap",
+            ("trap marked by x1 or x2 and not marked in m1 or m2", "trap",
              getNames b,
-             \fm -> findTrap net m0 m1 m2 (fmap fm b) sizeLimit,
+             \fm -> findTrap net m0 m1 m2 x1 x2 (fmap fm b) sizeLimit,
              \fm -> placesFromAssignment (fmap fm b)))
 
 findUTrapConstraints :: PetriNet -> Marking -> Marking -> Marking -> FiringVector -> FiringVector -> SIMap Place -> Maybe (Int, Integer) -> SBool
