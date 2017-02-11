@@ -65,11 +65,8 @@ sequenceIn u x = sum (mval x u) .> 0
 
 checkUTrap :: PetriNet -> SIMap Place -> SIMap Place -> SIMap Place -> SIMap Transition -> SIMap Transition -> Trap -> SBool
 checkUTrap net m0 m1 m2 x1 x2 utrap =
-            (
-                ((sequenceNotIn upre x1) ||| (sequenceIn uunmark x1) ||| (markedByMarking utrap m1))
-            &&&
-                ((sequenceNotIn upre x2) ||| (sequenceIn uunmark x2) ||| (markedByMarking utrap m2))
-            )
+            (((sequenceIn upre x1) &&& (sequenceNotIn uunmark x1)) ==> (markedByMarking utrap m1)) &&&
+            (((sequenceIn upre x2) &&& (sequenceNotIn uunmark x2)) ==> (markedByMarking utrap m2))
         where upost = mpost net utrap
               upre = mpre net utrap
               uunmark = upost \\ upre
@@ -80,15 +77,8 @@ checkUTrapConstraints net m0 m1 m2 x1 x2 traps =
 
 checkUSiphon :: PetriNet -> SIMap Place -> SIMap Place -> SIMap Place -> SIMap Transition -> SIMap Transition -> Siphon -> SBool
 checkUSiphon net m0 m1 m2 x1 x2 usiphon =
-            (
-                markedByMarking usiphon m0
-            |||
-                (
-                    ((sequenceNotIn upost x1) ||| (sequenceIn umark x1))
-                &&&
-                    ((sequenceNotIn upost x2) ||| (sequenceIn umark x2))
-                )
-            )
+            (((sequenceIn upost x1) &&& (sequenceNotIn umark x1)) ==> (markedByMarking usiphon m0)) &&&
+            (((sequenceIn upost x2) &&& (sequenceNotIn umark x2)) ==> (markedByMarking usiphon m0))
         where upost = mpost net usiphon
               upre = mpre net usiphon
               umark = upre \\ upost
