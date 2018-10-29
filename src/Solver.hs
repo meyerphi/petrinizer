@@ -33,7 +33,7 @@ symConstraints vars constraint = do
 getSolverConfig :: Bool -> Bool -> SMTConfig
 getSolverConfig verbose auto =
         let tweaks = if auto then [] else ["(set-option :auto_config false)"]
-        in  z3{ verbose=verbose, solverTweaks=tweaks }
+        in  z3{ verbose=verbose }
 
 checkSat :: (SatModel a, SymWord a, Show a, Show b) =>
         ConstraintProblem a b -> OptIO (Maybe b)
@@ -43,7 +43,7 @@ checkSat (problemName, resultName, vars, constraint, interpretation) = do
         autoConf <- opt optSMTAuto
         result <- liftIO (satWith (getSolverConfig (verbosity >= 4) autoConf)
                     (symConstraints vars constraint))
-        case rebuildModel vars (getModel result) of
+        case rebuildModel vars (getModelAssignment result) of
             Nothing -> do
                 verbosePut 2 "- unsat"
                 return Nothing
