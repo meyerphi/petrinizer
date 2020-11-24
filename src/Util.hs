@@ -14,7 +14,6 @@ import qualified Data.Set as S
 import Data.List
 import Data.Ord
 import Data.Function
-import Control.Concurrent.ParallelIO
 import Control.Monad
 import Control.Monad.Reader
 import System.IO
@@ -130,7 +129,7 @@ putLine = liftIO . putStrLn
 parallelIO :: [OptIO a] -> OptIO [a]
 parallelIO tasks = do
         opts <- ask
-        liftIO $ parallel $ map (`runReaderT` opts) tasks
+        liftIO $ mapM (`runReaderT` opts) tasks
 
 {-
 - String functions

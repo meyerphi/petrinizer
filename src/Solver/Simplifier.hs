@@ -24,21 +24,21 @@ import Property
 import PetriNet
 
 checkTransPositive :: SBMap Transition -> S.Set Transition -> SBool
-checkTransPositive m ts = bOr $ map (val m) $ S.elems ts
+checkTransPositive m ts = sOr $ map (val m) $ S.elems ts
 
 checkTransNegative :: SBMap Transition -> S.Set Transition -> SBool
-checkTransNegative m ts = bAnd $ map (bnot . val m) $ S.elems ts
+checkTransNegative m ts = sAnd $ map (sNot . val m) $ S.elems ts
 
 checkCutPositive :: SBMap Transition -> SimpleCut -> SBool
 checkCutPositive m (c0, cs) =
-        checkTransNegative m c0 &&& bAnd (map (checkTransPositive m) cs)
+        checkTransNegative m c0 .&& sAnd (map (checkTransPositive m) cs)
 
 checkCutNegative :: SBMap Transition -> SimpleCut -> SBool
 checkCutNegative m (c0, cs) =
-        checkTransPositive m c0 ||| bOr (map (checkTransNegative m) cs)
+        checkTransPositive m c0 .|| sOr (map (checkTransNegative m) cs)
 
 checkCuts :: SimpleCut -> [SimpleCut] -> SBMap Transition -> SBool
-checkCuts c0 cs m = checkCutPositive m c0 &&& bAnd (map (checkCutNegative m) cs)
+checkCuts c0 cs m = checkCutPositive m c0 .&& sAnd (map (checkCutNegative m) cs)
 
 getSubsumption :: BMap Transition -> [Transition]
 getSubsumption m = M.keys (M.filter id m)

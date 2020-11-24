@@ -3,7 +3,6 @@ module Main where
 import System.Exit
 import System.IO
 import Control.Monad
-import Control.Concurrent.ParallelIO
 import Control.Arrow (first)
 import Data.List (partition,minimumBy,genericLength)
 import Data.Ord (comparing)
@@ -320,7 +319,7 @@ checkLivenessProperty net f = do
         auto <- opt optAuto
         r <-
             if auto then do
-                rAll <- parallelIO $ map ($ checkLivenessProperty' net f []) methods
+                rAll <- mapM ($ checkLivenessProperty' net f []) methods
                 verbosePut 2 $
                     "Number of refinements in tested methods: " ++ show (map (length . snd) rAll)
                 let rSucc = filter (isNothing . fst) rAll
@@ -349,7 +348,7 @@ getLivenessInvariant :: PetriNet -> Formula Transition -> [Cut] ->
 getLivenessInvariant net f cuts = do
         dnfCuts <- generateCuts net f cuts
         verbosePut 2 $ "Number of disjuncts: " ++ show (length dnfCuts)
-        invs <- parallelIO (map (checkSat . checkLivenessInvariantSat net f) dnfCuts)
+        invs <- mapM (checkSat . checkLivenessInvariantSat net f) dnfCuts
         let cutInvs = map cutToLivenessInvariant cuts
         return (sequence invs, cutInvs)
 
@@ -556,5 +555,4 @@ exitErrorWith msg = do
 
 cleanupAndExitWith :: ExitCode -> IO ()
 cleanupAndExitWith code = do
-        stopGlobalPool
         exitWith code

@@ -13,29 +13,29 @@ import Solver
 checkPrePostPlaces :: PetriNet -> SIMap Place -> SIMap Transition ->
         SBool
 checkPrePostPlaces net p' t' =
-            bAnd $ map checkPrePostPlace $ places net
+            sAnd $ map checkPrePostPlace $ places net
         where checkPrePostPlace p =
                   let incoming = map (positiveVal t') $ pre net p
                       outgoing = map (positiveVal t') $ post net p
                       pVal = positiveVal p' p
-                  in  pVal ==> bAnd incoming &&& bAnd outgoing
+                  in  pVal .=> sAnd incoming .&& sAnd outgoing
 
 checkPrePostTransitions :: PetriNet -> SIMap Place -> SIMap Transition ->
         SBool
 checkPrePostTransitions net p' t' =
-            bAnd $ map checkPrePostTransition $ transitions net
+            sAnd $ map checkPrePostTransition $ transitions net
         where checkPrePostTransition t =
                   let incoming = mval p' $ pre net t
                       outgoing = mval p' $ post net t
                       tVal = positiveVal t' t
-                  in  tVal ==> sum incoming .== 1 &&& sum outgoing .== 1
+                  in  tVal .=> sum incoming .== 1 .&& sum outgoing .== 1
 
 checkSubsetTransitions :: FiringVector ->
         SIMap Transition -> SIMap Transition -> SBool
 checkSubsetTransitions x t' y =
             let ySubset = map checkTransition $ elems x
-            in  bAnd ySubset &&& sumVal y .< sum (mval t' (elems x))
-        where checkTransition t = positiveVal y t ==> positiveVal t' t
+            in  sAnd ySubset .&& sumVal y .< sum (mval t' (elems x))
+        where checkTransition t = positiveVal y t .=> positiveVal t' t
 
 checkNotEmpty :: SIMap Transition -> SBool
 checkNotEmpty y = (.>0) $ sumVal y
@@ -43,13 +43,13 @@ checkNotEmpty y = (.>0) $ sumVal y
 checkClosed :: PetriNet -> FiringVector -> SIMap Place ->
         SIMap Transition -> SBool
 checkClosed net x p' y =
-            bAnd $ map checkPlaceClosed $ places net
+            sAnd $ map checkPlaceClosed $ places net
         where checkPlaceClosed p =
                   let pVal = positiveVal p' p
-                      postVal = bAnd $ map checkTransition
+                      postVal = sAnd $ map checkTransition
                                     [(t,t') | t <- pre net p, t' <- post net p,
                                               val x t > 0, val x t' > 0 ]
-                  in  pVal ==> postVal
+                  in  pVal .=> postVal
               checkTransition (t,t') = val y t .== val y t'
 
 checkTokens :: PetriNet -> SIMap Place -> SBool
@@ -60,13 +60,13 @@ checkTokens net p' =
 checkBinary :: SIMap Place -> SIMap Transition ->
         SIMap Transition -> SBool
 checkBinary p' t' y =
-            checkBins p' &&&
-            checkBins t' &&&
+            checkBins p' .&&
+            checkBins t' .&&
             checkBins y
-        where checkBins xs = bAnd $ map (\x -> x .== 0 ||| x .== 1) $ vals xs
+        where checkBins xs = sAnd $ map (\x -> x .== 0 .|| x .== 1) $ vals xs
 
 checkSizeLimit :: SIMap Place -> SIMap Transition -> Maybe (Int, Integer) -> SBool
-checkSizeLimit _ _ Nothing = true
+checkSizeLimit _ _ Nothing = sTrue
 checkSizeLimit p' _ (Just (_, curSize)) = (.< literal curSize) $ sumVal p'
 
 minimizeMethod :: Int -> Integer -> String
@@ -75,13 +75,13 @@ minimizeMethod _ curSize = "size smaller than" ++ show curSize
 checkSComponent :: PetriNet -> FiringVector -> Maybe (Int, Integer) -> SIMap Place ->
         SIMap Transition -> SIMap Transition -> SBool
 checkSComponent net x sizeLimit p' t' y =
-        checkPrePostPlaces net p' t' &&&
-        checkPrePostTransitions net p' t' &&&
-        checkSubsetTransitions x t' y &&&
-        checkNotEmpty y &&&
-        checkSizeLimit p' t' sizeLimit &&&
-        checkClosed net x p' y &&&
-        checkTokens net p' &&&
+        checkPrePostPlaces net p' t' .&&
+        checkPrePostTransitions net p' t' .&&
+        checkSubsetTransitions x t' y .&&
+        checkNotEmpty y .&&
+        checkSizeLimit p' t' sizeLimit .&&
+        checkClosed net x p' y .&&
+        checkTokens net p' .&&
         checkBinary p' t' y
 
 checkSComponentSat :: PetriNet -> FiringVector -> MinConstraintProblem Integer Cut Integer

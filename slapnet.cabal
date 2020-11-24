@@ -21,8 +21,8 @@ executable slapnet
   main-is: Main.hs
   other-modules:
   -- other-extensions:
-  build-depends:       base >=4 && <5, sbv ==7.13, parsec, containers, transformers,
-                       bytestring, mtl, stm, async, parallel-io
+  build-depends:       base >=4 && <5, sbv >=8.9, parsec, containers, transformers,
+                       bytestring, mtl, stm, async
   hs-source-dirs:      src
   default-language:    Haskell2010
   ghc-options:         -fsimpl-tick-factor=1000 -threaded -rtsopts -with-rtsopts=-N 

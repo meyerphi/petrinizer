@@ -68,7 +68,7 @@ trapToSimpleTerm traps = (buildVector (map (\p -> (p, 1)) traps), 1)
 
 checkInductivityConstraint :: PetriNet -> SIMap Place -> SBool
 checkInductivityConstraint net lambda =
-            bAnd $ map checkInductivity $ transitions net
+            sAnd $ map checkInductivity $ transitions net
         where checkInductivity t =
                 let incoming = map addPlace $ lpre net t
                     outgoing = map addPlace $ lpost net t
@@ -85,22 +85,22 @@ checkSafetyConstraint net terms lambda y =
 checkPropertyConstraint :: PetriNet -> [NamedTerm] -> SIMap Place ->
         SIMap String -> SBool
 checkPropertyConstraint net terms lambda y =
-            bAnd $ map checkPlace $ places net
+            sAnd $ map checkPlace $ places net
         where checkPlace p =
                   val lambda p .>= sum (map (addTerm p) terms)
               addTerm p (n,(ps,_)) = val y n * literal (val ps p)
 
 checkNonNegativityConstraint :: [NamedTerm] -> SIMap String -> SBool
 checkNonNegativityConstraint terms y =
-            bAnd $ map checkVal terms
+            sAnd $ map checkVal terms
         where checkVal (n,_) = val y n .>= 0
 
 checkSafetyInvariant :: PetriNet -> [NamedTerm] -> SIMap Place ->
         SIMap String -> SBool
 checkSafetyInvariant net terms lambda y =
-        checkInductivityConstraint net lambda  &&&
-        checkSafetyConstraint net terms lambda y &&&
-        checkPropertyConstraint net terms lambda y &&&
+        checkInductivityConstraint net lambda  .&&
+        checkSafetyConstraint net terms lambda y .&&
+        checkPropertyConstraint net terms lambda y .&&
         checkNonNegativityConstraint terms y
 
 -- TODO: split up into many smaller sat problems

@@ -24,10 +24,10 @@ opToFunction Le = (.<=)
 opToFunction Lt = (.<)
 
 evaluateFormula :: (Ord a, Show a) => Formula a -> SIMap a -> SBool
-evaluateFormula FTrue _ = true
-evaluateFormula FFalse _ = false
+evaluateFormula FTrue _ = sTrue
+evaluateFormula FFalse _ = sFalse
 evaluateFormula (LinearInequation lhs op rhs) m =
         opToFunction op (evaluateTerm lhs m) (evaluateTerm rhs m)
-evaluateFormula (Neg p) m = bnot $ evaluateFormula p m
-evaluateFormula (p :&: q) m = evaluateFormula p m &&& evaluateFormula q m
-evaluateFormula (p :|: q) m = evaluateFormula p m ||| evaluateFormula q m
+evaluateFormula (Neg p) m = sNot $ evaluateFormula p m
+evaluateFormula (p :&: q) m = evaluateFormula p m .&& evaluateFormula q m
+evaluateFormula (p :|: q) m = evaluateFormula p m .|| evaluateFormula q m

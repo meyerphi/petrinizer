@@ -13,20 +13,20 @@ import Solver
 
 trapConstraints :: PetriNet -> SBMap Place -> SBool
 trapConstraints net b =
-            bAnd $ map trapConstraint $ transitions net
+            sAnd $ map trapConstraint $ transitions net
         where trapConstraint t =
-                  bOr (mval b (pre net t)) ==> bOr (mval b (post net t))
+                  sOr (mval b (pre net t)) .=> sOr (mval b (post net t))
 
 trapInitiallyMarked :: PetriNet -> SBMap Place -> SBool
-trapInitiallyMarked net b = bOr $ mval b $ initials net
+trapInitiallyMarked net b = sOr $ mval b $ initials net
 
 trapUnassigned :: Marking -> SBMap Place -> SBool
-trapUnassigned m b = bAnd $ map (bnot . val b) $ elems m
+trapUnassigned m b = sAnd $ map (sNot . val b) $ elems m
 
 checkTrap :: PetriNet -> Marking -> SBMap Place -> SBool
 checkTrap net m b =
-        trapConstraints net b &&&
-        trapInitiallyMarked net b &&&
+        trapConstraints net b .&&
+        trapInitiallyMarked net b .&&
         trapUnassigned m b
 
 checkTrapSat :: PetriNet -> Marking -> ConstraintProblem Bool Trap

@@ -72,12 +72,12 @@ toSimpleCut (c0, ncs) = (c0, map snd ncs)
 
 checkLivenessInvariant :: PetriNet -> NamedCut -> SIMap String -> SBool
 checkLivenessInvariant net (comp0, comps) m =
-            bAnd (map checkTransition (transitions net)) &&&
-            val m "@yone" + sum (map addComp comps) .> 0 &&&
-            bAnd (map (checkNonNegativity . placeName) (places net)) &&&
-            checkNonNegativity "@yone" &&&
-            checkNonNegativity "@comp0" &&&
-            bAnd (map (\(n, _) -> checkNonNegativity n) comps)
+            sAnd (map checkTransition (transitions net)) .&&
+            val m "@yone" + sum (map addComp comps) .> 0 .&&
+            sAnd (map (checkNonNegativity . placeName) (places net)) .&&
+            checkNonNegativity "@yone" .&&
+            checkNonNegativity "@comp0" .&&
+            sAnd (map (\(n, _) -> checkNonNegativity n) comps)
         where checkTransition t =
                 let incoming = map addPlace $ lpre net t
                     outgoing = map addPlace $ lpost net t

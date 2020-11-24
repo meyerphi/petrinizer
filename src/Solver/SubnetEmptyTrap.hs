@@ -14,30 +14,30 @@ import Solver
 subnetTrapConstraints :: PetriNet -> Marking -> FiringVector ->
         SIMap Place -> SBool
 subnetTrapConstraints net m x b =
-            bAnd $ map trapConstraint $ elems x
+            sAnd $ map trapConstraint $ elems x
         where placeConstraints = (.> 0) . sum . mval b . filter (\p -> val m p == 0)
               trapConstraint t =
-                  placeConstraints (pre net t) ==> placeConstraints (post net t)
+                  placeConstraints (pre net t) .=> placeConstraints (post net t)
 
 properTrap :: SIMap Place -> SBool
 properTrap b = sum (vals b) .> 0
 
 checkSizeLimit :: SIMap Place -> Maybe (Int, Integer) -> SBool
-checkSizeLimit _ Nothing = true
+checkSizeLimit _ Nothing = sTrue
 checkSizeLimit b (Just (_, curSize)) = (.< literal curSize) $ sumVal b
 
 minimizeMethod :: Int -> Integer -> String
 minimizeMethod _ curSize = "size smaller than " ++ show curSize
 
 checkBinary :: SIMap Place -> SBool
-checkBinary = bAnd . map (\x -> x .== 0 ||| x .== 1) . vals
+checkBinary = sAnd . map (\x -> x .== 0 .|| x .== 1) . vals
 
 checkSubnetEmptyTrap :: PetriNet -> Marking -> FiringVector ->
         SIMap Place -> Maybe (Int, Integer) -> SBool
 checkSubnetEmptyTrap net m x b sizeLimit =
-        subnetTrapConstraints net m x b &&&
-        checkSizeLimit b sizeLimit &&&
-        checkBinary b &&&
+        subnetTrapConstraints net m x b .&&
+        checkSizeLimit b sizeLimit .&&
+        checkBinary b .&&
         properTrap b
 
 checkSubnetEmptyTrapSat :: PetriNet -> Marking -> FiringVector -> MinConstraintProblem Integer Trap Integer

@@ -18,13 +18,13 @@ type ConstraintProblem a b =
 type MinConstraintProblem a b c =
         (Int -> c -> String, Maybe (Int, c) -> ConstraintProblem a (b, c))
 
-rebuildModel :: SymWord a => [String] -> Either String (Bool, [a]) ->
+rebuildModel :: SymVal a => [String] -> Either String (Bool, [a]) ->
         Maybe (Model a)
 rebuildModel _ (Left _) = Nothing
 rebuildModel _ (Right (True, _)) = error "Prover returned unknown"
 rebuildModel vars (Right (False, m)) = Just $ M.fromList $ vars `zip` m
 
-symConstraints :: SymWord a => [String] -> ((String -> SBV a) -> SBool) ->
+symConstraints :: SymVal a => [String] -> ((String -> SBV a) -> SBool) ->
         Symbolic SBool
 symConstraints vars constraint = do
         syms <- mapM exists vars
@@ -35,7 +35,7 @@ getSolverConfig verbose auto =
         let tweaks = if auto then [] else ["(set-option :auto_config false)"]
         in  z3{ verbose=verbose }
 
-checkSat :: (SatModel a, SymWord a, Show a, Show b) =>
+checkSat :: (SatModel a, SymVal a, Show a, Show b) =>
         ConstraintProblem a b -> OptIO (Maybe b)
 checkSat (problemName, resultName, vars, constraint, interpretation) = do
         verbosePut 2 $ "Checking SAT of " ++ problemName
@@ -54,7 +54,7 @@ checkSat (problemName, resultName, vars, constraint, interpretation) = do
                 verbosePut 4 $ "- raw model: " ++ show rawModel
                 return $ Just model
 
-checkSatMin :: (SatModel a, SymWord a, Show a, Show b, Show c) =>
+checkSatMin :: (SatModel a, SymVal a, Show a, Show b, Show c) =>
         MinConstraintProblem a b c -> OptIO (Maybe b)
 checkSatMin (minMethod, minProblem) = do
         optMin <- opt optMinimizeRefinement

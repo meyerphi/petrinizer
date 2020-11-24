@@ -18,34 +18,34 @@ checkPrePostPlaces :: PetriNet -> SIMap Place -> SIMap Place ->
         SIMap Transition -> SIMap Transition -> SIMap Transition ->
         SBool
 checkPrePostPlaces net p1 p2 t0 t1 t2 =
-            bAnd (map (checkPrePostPlace p1 [t0,t1]) (places net)) &&&
-            bAnd (map (checkPrePostPlace p2 [t0,t2]) (places net))
+            sAnd (map (checkPrePostPlace p1 [t0,t1]) (places net)) .&&
+            sAnd (map (checkPrePostPlace p2 [t0,t2]) (places net))
         where checkPrePostPlace ps ts p =
                   let incoming = map (checkIn ts) $ pre net p
                       outgoing = map (checkIn ts) $ post net p
-                  in  val ps p .== 1 ==> bAnd incoming &&& bAnd outgoing
+                  in  val ps p .== 1 .=> sAnd incoming .&& sAnd outgoing
               checkIn xs x = sum (map (`val` x) xs) .== 1
 
 checkPrePostTransitions :: PetriNet -> SIMap Place -> SIMap Place ->
         SIMap Transition -> SIMap Transition -> SIMap Transition ->
         SBool
 checkPrePostTransitions net p1 p2 t0 t1 t2 =
-            bAnd (map (checkPrePostTransition t0 [p1,p2]) (transitions net)) &&&
-            bAnd (map (checkPrePostTransition t1 [p1]) (transitions net)) &&&
-            bAnd (map (checkPrePostTransition t2 [p2]) (transitions net))
+            sAnd (map (checkPrePostTransition t0 [p1,p2]) (transitions net)) .&&
+            sAnd (map (checkPrePostTransition t1 [p1]) (transitions net)) .&&
+            sAnd (map (checkPrePostTransition t2 [p2]) (transitions net))
         where checkPrePostTransition ts ps t =
                   let incoming = checkInOne ps $ pre net t
                       outgoing = checkInOne ps $ post net t
-                  in  val ts t .== 1 ==> incoming &&& outgoing
+                  in  val ts t .== 1 .=> incoming .&& outgoing
               checkInOne xs x = sum (concatMap (`mval` x) xs) .== 1
 
 checkComponents :: FiringVector -> SIMap Transition -> SIMap Transition -> SBool
-checkComponents x t1 t2 = checkComponent t1 &&& checkComponent t2
+checkComponents x t1 t2 = checkComponent t1 .&& checkComponent t2
         where checkTransition ts t = val ts t .== 1
-              checkComponent ts = bOr $ map (checkTransition ts) $ elems x
+              checkComponent ts = sOr $ map (checkTransition ts) $ elems x
 
 checkZeroUnused :: FiringVector -> SIMap Transition -> SBool
-checkZeroUnused x t0 = bAnd (map checkTransition (elems x))
+checkZeroUnused x t0 = sAnd (map checkTransition (elems x))
         where checkTransition t = val t0 t .== 0
 
 checkTokens :: PetriNet -> SIMap Place -> SIMap Place -> SBool
@@ -57,21 +57,21 @@ checkDisjunct :: PetriNet ->
         SIMap Place -> SIMap Place -> SIMap Transition -> SIMap Transition -> SIMap Transition ->
         SBool
 checkDisjunct net p1 p2 t0 t1 t2 =
-            bAnd (map checkPlace (places net)) &&&
-            bAnd (map checkTransition (transitions net))
+            sAnd (map checkPlace (places net)) .&&
+            sAnd (map checkTransition (transitions net))
         where checkPlace p = val p1 p + val p2 p .<= 1
               checkTransition t = val t0 t + val t1 t + val t2 t .<= 1
 
 checkBinary :: SIMap Place -> SIMap Place -> SIMap Transition ->
         SIMap Transition -> SIMap Transition -> SBool
 checkBinary p1 p2 t0 t1 t2 =
-            checkBins p1 &&& checkBins p2 &&& checkBins t0 &&& checkBins t1 &&& checkBins t2
-        where checkBins xs = bAnd $ map (\x -> x .== 0 ||| x .== 1) $ vals xs
+            checkBins p1 .&& checkBins p2 .&& checkBins t0 .&& checkBins t1 .&& checkBins t2
+        where checkBins xs = sAnd $ map (\x -> x .== 0 .|| x .== 1) $ vals xs
 
 checkSizeLimit ::
         SIMap Place -> SIMap Place -> SIMap Transition -> SIMap Transition -> SIMap Transition ->
         Maybe (Int, SizeIndicator) -> SBool
-checkSizeLimit _ _ _ _ _ Nothing = true
+checkSizeLimit _ _ _ _ _ Nothing = sTrue
 checkSizeLimit p1 p2 t0 t1 t2 (Just (minMethod, (p1Size, p2Size, t0Size, t1Size, t2Size))) =
         let p1SizeNext = sumVal p1
             p2SizeNext = sumVal p2
@@ -84,27 +84,27 @@ checkSizeLimit p1 p2 t0 t1 t2 (Just (minMethod, (p1Size, p2Size, t0Size, t1Size,
             t1SizeNow = literal t1Size
             t2SizeNow = literal t2Size
         in  case minMethod of
-                1 -> (t0SizeNext .< t0SizeNow) |||
-                    (t0SizeNext .== t0SizeNow &&&
-                        t1SizeNext .> t1SizeNow &&& t2SizeNext .>= t2SizeNow) |||
-                    (t0SizeNext .== t0SizeNow &&&
-                        t1SizeNext .>= t1SizeNow &&& t2SizeNext .> t2SizeNow)
-                2 -> (t1SizeNext .> t1SizeNow &&& t2SizeNext .>= t2SizeNow) |||
-                    (t1SizeNext .>= t1SizeNow &&& t2SizeNext .> t2SizeNow) |||
-                    (t1SizeNext .== t1SizeNow &&& t2SizeNext .== t2SizeNow &&&
+                1 -> (t0SizeNext .< t0SizeNow) .||
+                    (t0SizeNext .== t0SizeNow .&&
+                        t1SizeNext .> t1SizeNow .&& t2SizeNext .>= t2SizeNow) .||
+                    (t0SizeNext .== t0SizeNow .&&
+                        t1SizeNext .>= t1SizeNow .&& t2SizeNext .> t2SizeNow)
+                2 -> (t1SizeNext .> t1SizeNow .&& t2SizeNext .>= t2SizeNow) .||
+                    (t1SizeNext .>= t1SizeNow .&& t2SizeNext .> t2SizeNow) .||
+                    (t1SizeNext .== t1SizeNow .&& t2SizeNext .== t2SizeNow .&&
                         t0SizeNext .< t0SizeNow)
-                3 -> (p1SizeNext + p2SizeNext .< p1SizeNow + p2SizeNow) |||
-                    (p1SizeNext + p2SizeNext .== p1SizeNow + p2SizeNow &&&
+                3 -> (p1SizeNext + p2SizeNext .< p1SizeNow + p2SizeNow) .||
+                    (p1SizeNext + p2SizeNext .== p1SizeNow + p2SizeNow .&&
                         t0SizeNext .< t0SizeNow)
-                4 -> (p1SizeNext + p2SizeNext .> p1SizeNow + p2SizeNow) |||
-                    (p1SizeNext + p2SizeNext .== p1SizeNow + p2SizeNow &&&
+                4 -> (p1SizeNext + p2SizeNext .> p1SizeNow + p2SizeNow) .||
+                    (p1SizeNext + p2SizeNext .== p1SizeNow + p2SizeNow .&&
                         t0SizeNext .< t0SizeNow)
                 5 -> (p1SizeNext + p2SizeNext .< p1SizeNow + p2SizeNow)
                 6 -> (p1SizeNext + p2SizeNext .> p1SizeNow + p2SizeNow)
-                7 -> (t1SizeNext .> t1SizeNow &&& t2SizeNext .>= t2SizeNow) |||
-                    (t1SizeNext .>= t1SizeNow &&& t2SizeNext .> t2SizeNow)
-                8 -> (t1SizeNext .< t1SizeNow &&& t2SizeNext .<= t2SizeNow) |||
-                    (t1SizeNext .<= t1SizeNow &&& t2SizeNext .< t2SizeNow)
+                7 -> (t1SizeNext .> t1SizeNow .&& t2SizeNext .>= t2SizeNow) .||
+                    (t1SizeNext .>= t1SizeNow .&& t2SizeNext .> t2SizeNow)
+                8 -> (t1SizeNext .< t1SizeNow .&& t2SizeNext .<= t2SizeNow) .||
+                    (t1SizeNext .<= t1SizeNow .&& t2SizeNext .< t2SizeNow)
                 9 -> (t1SizeNext + t2SizeNext .> t1SizeNow + t2SizeNow)
                 _ -> error $ "minimization method " ++ show minMethod ++ " not supported"
 
@@ -134,13 +134,13 @@ checkSComponent :: PetriNet -> FiringVector -> Maybe (Int, SizeIndicator) ->
         SIMap Place -> SIMap Place -> SIMap Transition -> SIMap Transition -> SIMap Transition ->
         SBool
 checkSComponent net x sizeLimit p1 p2 t0 t1 t2 =
-        checkPrePostPlaces net p1 p2 t0 t1 t2 &&&
-        checkPrePostTransitions net p1 p2 t0 t1 t2 &&&
-        checkZeroUnused x t0 &&&
-        checkComponents x t1 t2 &&&
-        checkSizeLimit p1 p2 t0 t1 t2 sizeLimit &&&
-        checkTokens net p1 p2 &&&
-        checkBinary p1 p2 t0 t1 t2 &&&
+        checkPrePostPlaces net p1 p2 t0 t1 t2 .&&
+        checkPrePostTransitions net p1 p2 t0 t1 t2 .&&
+        checkZeroUnused x t0 .&&
+        checkComponents x t1 t2 .&&
+        checkSizeLimit p1 p2 t0 t1 t2 sizeLimit .&&
+        checkTokens net p1 p2 .&&
+        checkBinary p1 p2 t0 t1 t2 .&&
         checkDisjunct net p1 p2 t0 t1 t2
 
 checkSComponentWithCutSat :: PetriNet -> FiringVector -> MinConstraintProblem Integer Cut SizeIndicator

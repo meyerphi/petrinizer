@@ -31,42 +31,42 @@ instance Show BlockInvariant where
 
 nonNegativityConstraints :: (Ord a, Show a) => SIMap a -> SBool
 nonNegativityConstraints m =
-            bAnd $ map checkVal $ vals m
+            sAnd $ map checkVal $ vals m
         where checkVal x = x .>= 0
 
 checkNonNegativityConstraints :: (Ord a, Show a) => [SIMap a] -> SBool
 checkNonNegativityConstraints xs =
-            bAnd $ map nonNegativityConstraints xs
+            sAnd $ map nonNegativityConstraints xs
 
 blockTerminationConstraints :: PetriNet -> Integer -> SIMap Transition -> SIMap Place -> SBool
 blockTerminationConstraints net i b y =
-            bAnd $ map checkTransition $ transitions net
+            sAnd $ map checkTransition $ transitions net
         where checkTransition t =
                 let incoming = map addPlace $ lpre net t
                     outgoing = map addPlace $ lpost net t
-                in  (val b t .== literal i) ==> (sum outgoing - sum incoming .< 0)
+                in  (val b t .== literal i) .=> (sum outgoing - sum incoming .< 0)
               addPlace (p, w) = literal w * val y p
 
 terminationConstraints :: PetriNet -> Integer -> SIMap Transition -> [SIMap Place] -> SBool
 terminationConstraints net k b ys =
-        bAnd $ [blockTerminationConstraints net i b y | (i,y) <- zip [1..] ys]
+        sAnd $ [blockTerminationConstraints net i b y | (i,y) <- zip [1..] ys]
 
 blockConstraints :: PetriNet -> Integer -> SIMap Transition -> SBool
 blockConstraints net k b =
-            bAnd $ map checkBlock $ transitions net
-        where checkBlock t = literal 1 .<= val b t &&& val b t .<= literal k
+            sAnd $ map checkBlock $ transitions net
+        where checkBlock t = literal 1 .<= val b t .&& val b t .<= literal k
 
 blockOrderConstraints :: PetriNet -> [Triplet] -> Integer -> SIMap Transition -> SBool
 blockOrderConstraints net triplets k b =
-            bAnd $ map checkTriplet triplets
-        where checkTriplet (s,t,ts) = (val b s .> val b t) ==> bOr (map (\t' -> val b t' .== val b t) ts)
+            sAnd $ map checkTriplet triplets
+        where checkTriplet (s,t,ts) = (val b s .> val b t) .=> sOr (map (\t' -> val b t' .== val b t) ts)
 
 checkTerminalMarkingReachable :: PetriNet -> [Triplet] -> Integer -> SIMap Transition -> [SIMap Place] -> Maybe (Int, InvariantSize) -> SBool
 checkTerminalMarkingReachable net triplets k b ys sizeLimit =
-        blockConstraints net k b &&&
-        terminationConstraints net k b ys &&&
-        blockOrderConstraints net triplets k b &&&
-        checkNonNegativityConstraints ys &&&
+        blockConstraints net k b .&&
+        terminationConstraints net k b ys .&&
+        blockOrderConstraints net triplets k b .&&
+        checkNonNegativityConstraints ys .&&
         checkSizeLimit k b ys sizeLimit
 
 checkTerminalMarkingReachableSat :: PetriNet -> [Triplet] -> Integer -> MinConstraintProblem Integer TerminalMarkingReachableInvariant InvariantSize
@@ -94,24 +94,24 @@ minimizeMethod 6 (curYSize, curYMax, curTSize) = "number of transitions in last 
 minimizeMethod _ _ = error "minimization method not supported"
 
 checkSizeLimit :: Integer -> SIMap Transition -> [SIMap Place] -> Maybe (Int, InvariantSize) -> SBool
-checkSizeLimit _ _ _ Nothing = true
+checkSizeLimit _ _ _ Nothing = sTrue
 checkSizeLimit k b ys (Just (1, (curYSize, _, _))) = (sum (map (\y -> sum (map (\yi -> ite (yi .> 0) (1::SInteger) 0) (vals y))) ys) .< literal (fromIntegral (sum curYSize)))
 checkSizeLimit k b ys (Just (2, (_, _, curTSize))) = (sum (map (\tb -> ite (tb .== (literal k)) (1::SInteger) 0) (vals b))) .< literal (fromIntegral (last curTSize))
 checkSizeLimit k b ys (Just (3, (curYSize, _, curTSize))) =
-        ((sum (map (\tb -> ite (tb .== (literal k)) (1::SInteger) 0) (vals b))) .< literal (fromIntegral (last curTSize))) ||| (
-            ((sum (map (\tb -> ite (tb .== (literal k)) (1::SInteger) 0) (vals b))) .== literal (fromIntegral (last curTSize))) &&&
+        ((sum (map (\tb -> ite (tb .== (literal k)) (1::SInteger) 0) (vals b))) .< literal (fromIntegral (last curTSize))) .|| (
+            ((sum (map (\tb -> ite (tb .== (literal k)) (1::SInteger) 0) (vals b))) .== literal (fromIntegral (last curTSize))) .&&
             (sum (map (\y -> sum (map (\yi -> ite (yi .> 0) (1::SInteger) 0) (vals y))) ys) .< literal (fromIntegral (sum curYSize)))
         )
 checkSizeLimit k b ys (Just (4, (_, curYMax, _))) = ((foldl smax 0 (concatMap vals ys)) .< literal (fromIntegral (maximum curYMax)))
 checkSizeLimit k b ys (Just (5, (curYSize, curYMax, _))) =
-        (sum (map (\y -> sum (map (\yi -> ite (yi .> 0) (1::SInteger) 0) (vals y))) ys) .< literal (fromIntegral (sum curYSize))) ||| (
-            (sum (map (\y -> sum (map (\yi -> ite (yi .> 0) (1::SInteger) 0) (vals y))) ys) .== literal (fromIntegral (sum curYSize))) &&&
+        (sum (map (\y -> sum (map (\yi -> ite (yi .> 0) (1::SInteger) 0) (vals y))) ys) .< literal (fromIntegral (sum curYSize))) .|| (
+            (sum (map (\y -> sum (map (\yi -> ite (yi .> 0) (1::SInteger) 0) (vals y))) ys) .== literal (fromIntegral (sum curYSize))) .&&
             ((foldl smax 0 (concatMap vals ys)) .< literal (fromIntegral (maximum curYMax))))
 checkSizeLimit k b ys (Just (6, (curYSize, curYMax, curTSize))) =
-        ((sum (map (\tb -> ite (tb .== (literal k)) (1::SInteger) 0) (vals b))) .< literal (fromIntegral (last curTSize))) ||| (
-            ((sum (map (\tb -> ite (tb .== (literal k)) (1::SInteger) 0) (vals b))) .== literal (fromIntegral (last curTSize))) &&&
-            ((sum (map (\y -> sum (map (\yi -> ite (yi .> 0) (1::SInteger) 0) (vals y))) ys) .< literal (fromIntegral (sum curYSize))) ||| (
-                (sum (map (\y -> sum (map (\yi -> ite (yi .> 0) (1::SInteger) 0) (vals y))) ys) .== literal (fromIntegral (sum curYSize))) &&&
+        ((sum (map (\tb -> ite (tb .== (literal k)) (1::SInteger) 0) (vals b))) .< literal (fromIntegral (last curTSize))) .|| (
+            ((sum (map (\tb -> ite (tb .== (literal k)) (1::SInteger) 0) (vals b))) .== literal (fromIntegral (last curTSize))) .&&
+            ((sum (map (\y -> sum (map (\yi -> ite (yi .> 0) (1::SInteger) 0) (vals y))) ys) .< literal (fromIntegral (sum curYSize))) .|| (
+                (sum (map (\y -> sum (map (\yi -> ite (yi .> 0) (1::SInteger) 0) (vals y))) ys) .== literal (fromIntegral (sum curYSize))) .&&
                 ((foldl smax 0 (concatMap vals ys)) .< literal (fromIntegral (maximum curYMax))))))
 checkSizeLimit _ _ _ (Just (_, _)) = error "minimization method not supported"
 
